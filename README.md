@@ -1,6 +1,6 @@
 # StreamSaver
 
-Small and useful Twitch quality switcher for all Chrome-based browsers (`Chrome`, `Edge`, `Brave`, `Opera`, `Vivaldi`).
+Small and useful Twitch quality switcher for all Chrome-based browsers (`Chrome`, `Edge`, `Brave`, `Opera`, `Vivaldi`, `Arc`).
 
 ## What It Does
 
