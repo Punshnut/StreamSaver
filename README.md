@@ -14,7 +14,8 @@ It provides quick controls, a persistent low/high mode, and automatic re-applica
 ## Core Features
 
 - Quick Resolution buttons: `160p`, `360p`, `480p`, `720p`, `1080p`, `1440p`, `2160p`, `Source`
-- Fast Toggle between your saved Low/High presets
+- Saved mode resolutions for Low/High presets
+- Master plugin logic on/off switch (persisted)
 - Persistent mode switch:
   - `Travel / Data Saver`
   - `High Quality`
@@ -33,12 +34,13 @@ It provides quick controls, a persistent low/high mode, and automatic re-applica
 
 ## Mode Behavior (Simple)
 
-- `low` mode enforces your saved `fastToggleLow`
-- `high` mode enforces your saved `fastToggleHigh`
+- `low` mode enforces your saved low-mode resolution (`fastToggleLow`)
+- `high` mode enforces your saved high-mode resolution (`fastToggleHigh`)
 - Defaults:
   - `fastToggleLow = 480p`
   - `fastToggleHigh = Source`
   - `activeMode = high`
+  - `pluginEnabled = true`
 
 All settings are stored in `chrome.storage.local`, so they survive popup close, tab reload, and browser restart.
 

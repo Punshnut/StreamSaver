@@ -60,9 +60,9 @@
         </div>
       </section>
 
-      <!-- Saved low/high preset toggle -->
-      <section class="panel" aria-label="Fast Toggle">
-        <h2>Fast Toggle</h2>
+      <!-- Saved low/high mode resolutions -->
+      <section class="panel" aria-label="Resolutions">
+        <h2>Resolutions</h2>
         <div class="row">
           <label for="fastToggleLow">Low</label>
           <select id="fastToggleLow" name="fastToggleLow">
@@ -89,7 +89,13 @@
             <option value="Source" selected>Source</option>
           </select>
         </div>
-        <button type="button" id="fast-toggle-btn" class="primary-btn">Fast Toggle</button>
+        <div class="master-switch-row">
+          <p class="master-switch-copy">Plugin logic</p>
+          <label class="inline-toggle inline-toggle--master" for="plugin-enabled">
+            <input type="checkbox" id="plugin-enabled" name="pluginEnabled" />
+            <span id="plugin-enabled-label">Enabled</span>
+          </label>
+        </div>
       </section>
 
       <!-- Support CTA -->

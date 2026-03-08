@@ -11,8 +11,7 @@
     [MODE_VALUES.HIGH]: 'High Quality Mode'
   };
   const ACTION_NAMES = {
-    SET_QUALITY: 'setQuality',
-    FAST_TOGGLE: 'fastToggle'
+    SET_QUALITY: 'setQuality'
   };
   const STATUS_TYPES = {
     LOADING: 'loading',
@@ -23,15 +22,18 @@
     LOW: 'fastToggleLow',
     HIGH: 'fastToggleHigh',
     ACTIVE_MODE: 'activeMode',
-    QUICK_RESOLUTION_VISIBLE: 'quickResolutionVisible'
+    QUICK_RESOLUTION_VISIBLE: 'quickResolutionVisible',
+    PLUGIN_ENABLED: 'pluginEnabled'
   };
   const DEFAULT_SETTINGS = {
     [SETTINGS_KEYS.LOW]: '480p',
     [SETTINGS_KEYS.HIGH]: 'Source',
     [SETTINGS_KEYS.ACTIVE_MODE]: MODE_VALUES.HIGH,
-    [SETTINGS_KEYS.QUICK_RESOLUTION_VISIBLE]: false
+    [SETTINGS_KEYS.QUICK_RESOLUTION_VISIBLE]: false,
+    [SETTINGS_KEYS.PLUGIN_ENABLED]: true
   };
-  const READY_STATUS_MESSAGE = 'Ready. Manage mode or switch quick resolution manually.';
+  const READY_STATUS_MESSAGE = 'Ready. Manage mode or switch resolutions manually.';
+  const DISABLED_STATUS_MESSAGE = 'Plugin logic is disabled. Settings are saved but Twitch quality is unchanged.';
 
   const statusEl = document.getElementById('status');
   const popupRoot = document.querySelector('.popup');
@@ -39,12 +41,13 @@
   const modeHighButton = document.getElementById('mode-high-btn');
   const modeSummaryEl = document.getElementById('mode-summary');
   const qualityButtons = Array.from(document.querySelectorAll('.quality-btn'));
-  const fastToggleButton = document.getElementById('fast-toggle-btn');
   const fastToggleLow = document.getElementById('fastToggleLow');
   const fastToggleHigh = document.getElementById('fastToggleHigh');
+  const pluginEnabledToggle = document.getElementById('plugin-enabled');
+  const pluginEnabledLabel = document.getElementById('plugin-enabled-label');
   const quickResolutionToggle = document.getElementById('quick-resolution-visible');
   const quickResolutionContent = document.getElementById('quick-resolution-content');
-  const actionButtons = [...qualityButtons, fastToggleButton, modeLowButton, modeHighButton].filter(
+  const actionButtons = [...qualityButtons, modeLowButton, modeHighButton].filter(
     (button) => button instanceof HTMLButtonElement
   );
 
@@ -52,6 +55,7 @@
   let isActionInFlight = false;
   let currentActiveMode = DEFAULT_SETTINGS[SETTINGS_KEYS.ACTIVE_MODE];
   let isQuickResolutionVisible = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.QUICK_RESOLUTION_VISIBLE]);
+  let isPluginEnabled = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.PLUGIN_ENABLED]);
 
   console.log('[StreamSaver][popup] Popup loaded');
 
@@ -72,7 +76,7 @@
     if (autoResetMs > 0) {
       statusResetTimer = setTimeout(() => {
         statusEl.dataset.state = STATUS_TYPES.SUCCESS;
-        statusEl.textContent = READY_STATUS_MESSAGE;
+        statusEl.textContent = isPluginEnabled ? READY_STATUS_MESSAGE : DISABLED_STATUS_MESSAGE;
         statusResetTimer = null;
       }, autoResetMs);
     }
@@ -132,6 +136,25 @@
     if (quickResolutionToggle instanceof HTMLInputElement) {
       quickResolutionToggle.checked = nextVisible;
       quickResolutionToggle.setAttribute('aria-expanded', String(nextVisible));
+    }
+  }
+
+  /** Syncs plugin enable/disable switch state and related visual cues. */
+  function setPluginEnabledState(enabled) {
+    const nextEnabled = Boolean(enabled);
+    isPluginEnabled = nextEnabled;
+
+    if (popupRoot instanceof HTMLElement) {
+      popupRoot.dataset.pluginEnabled = String(nextEnabled);
+    }
+
+    if (pluginEnabledToggle instanceof HTMLInputElement) {
+      pluginEnabledToggle.checked = nextEnabled;
+      pluginEnabledToggle.setAttribute('aria-checked', String(nextEnabled));
+    }
+
+    if (pluginEnabledLabel instanceof HTMLElement) {
+      pluginEnabledLabel.textContent = nextEnabled ? 'Enabled' : 'Disabled';
     }
   }
 
@@ -246,18 +269,6 @@
       return `Requested ${requestedQuality} unavailable. Applied ${appliedQuality}.`;
     }
 
-    if (request.action === ACTION_NAMES.FAST_TOGGLE) {
-      const targetQuality = sanitizeQualityValue(details.targetQuality, '');
-      const detectedCurrentQuality = sanitizeQualityValue(details.detectedCurrentQuality, '');
-
-      if (targetQuality && detectedCurrentQuality) {
-        return `Fast Toggle: ${detectedCurrentQuality} -> ${targetQuality}`;
-      }
-      if (targetQuality) {
-        return `Fast Toggle switched to ${targetQuality}.`;
-      }
-    }
-
     if (request.action === ACTION_NAMES.SET_QUALITY) {
       const targetQuality = sanitizeQualityValue(details.appliedQuality || details.targetQuality, '');
       if (targetQuality) {
@@ -270,6 +281,11 @@
 
   /** Runs one action and updates popup status. */
   async function runActionWithStatus(request, loadingMessage) {
+    if (!isPluginEnabled) {
+      setStatus(STATUS_TYPES.ERROR, 'Plugin logic is disabled. Turn it on to apply quality changes.');
+      return;
+    }
+
     if (!beginAction(loadingMessage)) {
       return;
     }
@@ -305,17 +321,8 @@
     };
   }
 
-  /** Creates the payload for fast-toggle actions using persisted low/high presets. */
-  function buildFastToggleRequest(lowValue, highValue) {
-    return {
-      action: ACTION_NAMES.FAST_TOGGLE,
-      fastToggleLow: lowValue,
-      fastToggleHigh: highValue
-    };
-  }
-
-  /** Reads and sanitizes the configured fast-toggle pair from dropdowns. */
-  function readFastTogglePair() {
+  /** Reads and sanitizes the configured low/high mode resolutions from dropdowns. */
+  function readModeResolutions() {
     return {
       lowValue: sanitizeQualityValue(fastToggleLow.value, DEFAULT_SETTINGS[SETTINGS_KEYS.LOW]),
       highValue: sanitizeQualityValue(fastToggleHigh.value, DEFAULT_SETTINGS[SETTINGS_KEYS.HIGH])
@@ -351,20 +358,6 @@
     runActionWithStatus(buildSetQualityRequest(quality), `Applying ${quality}...`);
   }
 
-  /** Validates the fast-toggle pair and dispatches one fastToggle request. */
-  function handleFastToggleClick() {
-    const { lowValue, highValue } = readFastTogglePair();
-
-    console.log('[StreamSaver][popup] Fast Toggle click:', { lowValue, highValue });
-
-    if (lowValue === highValue) {
-      setStatus(STATUS_TYPES.ERROR, 'Fast Toggle values must be different.');
-      return;
-    }
-
-    runActionWithStatus(buildFastToggleRequest(lowValue, highValue), `Toggling ${lowValue} <-> ${highValue}...`);
-  }
-
   /** Saves mode change, then applies its target quality. */
   async function handleModeButtonClick(mode) {
     const normalizedMode = sanitizeModeValue(mode, MODE_VALUES.HIGH);
@@ -384,21 +377,22 @@
       return;
     }
 
-    const { lowValue, highValue } = readFastTogglePair();
+    if (!isPluginEnabled) {
+      setStatus(STATUS_TYPES.SUCCESS, 'Mode saved. Plugin logic is disabled, so no player changes were applied.', 1400);
+      return;
+    }
+
+    const { lowValue, highValue } = readModeResolutions();
     const targetQuality = normalizedMode === MODE_VALUES.LOW ? lowValue : highValue;
     runActionWithStatus(buildSetQualityRequest(targetQuality), `Applying ${targetQuality} for ${getModeLabel(normalizedMode)}...`);
   }
 
-  /** Binds click handlers for quality, fast-toggle, and mode controls. */
+  /** Binds click handlers for quality and mode controls. */
   function bindActionHandlers() {
     qualityButtons.forEach((button) => {
       button.addEventListener('click', () => {
         handleQualityButtonClick(button);
       });
-    });
-
-    fastToggleButton.addEventListener('click', () => {
-      handleFastToggleClick();
     });
 
     modeLowButton.addEventListener('click', () => {
@@ -421,21 +415,30 @@
       const highValue = sanitizeQualityValue(stored[SETTINGS_KEYS.HIGH], DEFAULT_SETTINGS[SETTINGS_KEYS.HIGH]);
       const activeMode = sanitizeModeValue(stored[SETTINGS_KEYS.ACTIVE_MODE], DEFAULT_SETTINGS[SETTINGS_KEYS.ACTIVE_MODE]);
       const quickResolutionVisible = stored[SETTINGS_KEYS.QUICK_RESOLUTION_VISIBLE] === true;
+      const pluginEnabled = stored[SETTINGS_KEYS.PLUGIN_ENABLED] !== false;
 
       fastToggleLow.value = lowValue;
       fastToggleHigh.value = highValue;
       currentActiveMode = activeMode;
       setQuickResolutionVisibility(quickResolutionVisible);
+      setPluginEnabledState(pluginEnabled);
       syncModeButtonsState();
 
-      console.log('[StreamSaver][popup] Settings loaded:', { lowValue, highValue, activeMode, quickResolutionVisible });
-      setStatus(STATUS_TYPES.SUCCESS, READY_STATUS_MESSAGE);
+      console.log('[StreamSaver][popup] Settings loaded:', {
+        lowValue,
+        highValue,
+        activeMode,
+        quickResolutionVisible,
+        pluginEnabled
+      });
+      setStatus(STATUS_TYPES.SUCCESS, isPluginEnabled ? READY_STATUS_MESSAGE : DISABLED_STATUS_MESSAGE);
     } catch (error) {
       console.error('[StreamSaver][popup] Failed to load settings:', error);
       fastToggleLow.value = DEFAULT_SETTINGS[SETTINGS_KEYS.LOW];
       fastToggleHigh.value = DEFAULT_SETTINGS[SETTINGS_KEYS.HIGH];
       currentActiveMode = DEFAULT_SETTINGS[SETTINGS_KEYS.ACTIVE_MODE];
       setQuickResolutionVisibility(DEFAULT_SETTINGS[SETTINGS_KEYS.QUICK_RESOLUTION_VISIBLE]);
+      setPluginEnabledState(DEFAULT_SETTINGS[SETTINGS_KEYS.PLUGIN_ENABLED]);
       syncModeButtonsState();
       setStatus(STATUS_TYPES.ERROR, 'Failed to load settings. Using defaults.');
     } finally {
@@ -460,7 +463,7 @@
     }
   }
 
-  /** Validates and saves a dropdown change for either fast-toggle endpoint. */
+  /** Validates and saves a dropdown change for either mode resolution endpoint. */
   function handleSelectChange(settingKey, selectEl) {
     const selectedValue = sanitizeQualityValue(selectEl.value, DEFAULT_SETTINGS[settingKey]);
 
@@ -482,6 +485,33 @@
     handleSelectChange(SETTINGS_KEYS.HIGH, fastToggleHigh);
   });
 
+  if (pluginEnabledToggle instanceof HTMLInputElement) {
+    pluginEnabledToggle.addEventListener('change', async () => {
+      const nextEnabled = pluginEnabledToggle.checked;
+      const previousEnabled = isPluginEnabled;
+
+      setPluginEnabledState(nextEnabled);
+      const didSave = await saveSetting(
+        SETTINGS_KEYS.PLUGIN_ENABLED,
+        nextEnabled,
+        nextEnabled ? 'Plugin logic enabled.' : 'Plugin logic disabled.'
+      );
+
+      if (!didSave) {
+        setPluginEnabledState(previousEnabled);
+        return;
+      }
+
+      if (!nextEnabled) {
+        return;
+      }
+
+      const { lowValue, highValue } = readModeResolutions();
+      const targetQuality = currentActiveMode === MODE_VALUES.LOW ? lowValue : highValue;
+      runActionWithStatus(buildSetQualityRequest(targetQuality), `Applying ${targetQuality} for ${getModeLabel(currentActiveMode)}...`);
+    });
+  }
+
   if (quickResolutionToggle instanceof HTMLInputElement) {
     quickResolutionToggle.addEventListener('change', () => {
       const visible = quickResolutionToggle.checked;
@@ -496,6 +526,7 @@
 
   bindActionHandlers();
   syncModeButtonsState();
+  setPluginEnabledState(isPluginEnabled);
   setQuickResolutionVisibility(isQuickResolutionVisible);
   loadSettings();
 })();

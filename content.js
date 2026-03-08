@@ -27,12 +27,14 @@
   const STORAGE_KEYS = {
     FAST_TOGGLE_LOW: 'fastToggleLow',
     FAST_TOGGLE_HIGH: 'fastToggleHigh',
-    ACTIVE_MODE: 'activeMode'
+    ACTIVE_MODE: 'activeMode',
+    PLUGIN_ENABLED: 'pluginEnabled'
   };
   const DEFAULT_MODE_SETTINGS = {
     [STORAGE_KEYS.FAST_TOGGLE_LOW]: '480p',
     [STORAGE_KEYS.FAST_TOGGLE_HIGH]: 'Source',
-    [STORAGE_KEYS.ACTIVE_MODE]: MODE_VALUES.HIGH
+    [STORAGE_KEYS.ACTIVE_MODE]: MODE_VALUES.HIGH,
+    [STORAGE_KEYS.PLUGIN_ENABLED]: true
   };
   const ENFORCEMENT_COOLDOWN_MS = 6000;
   const ENFORCEMENT_DEBOUNCE_MS = 600;
@@ -2530,16 +2532,38 @@
     return MODE_SET.has(value) ? value : MODE_VALUES.HIGH;
   }
 
+  /** Validates plugin-enabled state and defaults unknown values to enabled. */
+  function validatePluginEnabled(value) {
+    return value !== false;
+  }
+
+  /** Reads plugin-enabled state from storage with safe fallback. */
+  async function loadPluginEnabledSetting() {
+    try {
+      const stored = await chrome.storage.local.get({ [STORAGE_KEYS.PLUGIN_ENABLED]: DEFAULT_MODE_SETTINGS[STORAGE_KEYS.PLUGIN_ENABLED] });
+      return createResult(true, 'PLUGIN_ENABLED_READY', 'Loaded plugin-enabled setting from storage.', {
+        pluginEnabled: validatePluginEnabled(stored[STORAGE_KEYS.PLUGIN_ENABLED])
+      });
+    } catch (error) {
+      return createResult(false, 'PLUGIN_ENABLED_READ_FAILED', 'Failed to read plugin-enabled setting from storage.', {
+        error: String(error),
+        pluginEnabled: DEFAULT_MODE_SETTINGS[STORAGE_KEYS.PLUGIN_ENABLED]
+      });
+    }
+  }
+
   /** Loads and sanitizes active-mode quality settings from extension storage. */
   async function loadModeSettingsForEnforcement() {
     try {
       const stored = await chrome.storage.local.get(DEFAULT_MODE_SETTINGS);
+      const pluginEnabled = validatePluginEnabled(stored[STORAGE_KEYS.PLUGIN_ENABLED]);
       const activeMode = validateMode(stored[STORAGE_KEYS.ACTIVE_MODE]);
       const fastToggleLow = validateQuality(stored[STORAGE_KEYS.FAST_TOGGLE_LOW]) || DEFAULT_MODE_SETTINGS[STORAGE_KEYS.FAST_TOGGLE_LOW];
       const fastToggleHigh =
         validateQuality(stored[STORAGE_KEYS.FAST_TOGGLE_HIGH]) || DEFAULT_MODE_SETTINGS[STORAGE_KEYS.FAST_TOGGLE_HIGH];
 
       return createResult(true, 'MODE_SETTINGS_READY', 'Loaded mode settings from storage.', {
+        pluginEnabled,
         activeMode,
         fastToggleLow,
         fastToggleHigh
@@ -2553,12 +2577,14 @@
 
   /** Resolves target quality from current mode settings. */
   function resolveTargetQualityForMode(modeSettings) {
+    const pluginEnabled = validatePluginEnabled(modeSettings?.pluginEnabled);
     const activeMode = validateMode(modeSettings?.activeMode);
     const fastToggleLow = validateQuality(modeSettings?.fastToggleLow) || DEFAULT_MODE_SETTINGS[STORAGE_KEYS.FAST_TOGGLE_LOW];
     const fastToggleHigh = validateQuality(modeSettings?.fastToggleHigh) || DEFAULT_MODE_SETTINGS[STORAGE_KEYS.FAST_TOGGLE_HIGH];
     const targetQuality = activeMode === MODE_VALUES.LOW ? fastToggleLow : fastToggleHigh;
 
     return {
+      pluginEnabled,
       activeMode,
       fastToggleLow,
       fastToggleHigh,
@@ -2791,101 +2817,16 @@
   /** Handles action=setQuality using validated page state and robust UI automation. */
   async function handleSetQualityRequest(targetQuality, pageSupport) {
     return runQualityRequestExclusive('setQuality', async () => {
+      const pluginEnabledResult = await loadPluginEnabledSetting();
+      if (!pluginEnabledResult.ok) {
+        return makeResponse(false, 'setQuality', pluginEnabledResult.message, pluginEnabledResult.details);
+      }
+      if (!pluginEnabledResult.details?.pluginEnabled) {
+        return makeResponse(false, 'setQuality', 'Plugin logic is disabled. Turn it on in the popup to apply quality changes.', {
+          pluginEnabled: false
+        });
+      }
       return executeSetQualityAutomation(targetQuality, pageSupport, 'setQuality');
-    });
-  }
-
-  /** Handles action=fastToggle by switching between configured low/high presets. */
-  async function handleFastToggleRequest(fastToggleLow, fastToggleHigh, pageSupport) {
-    return runQualityRequestExclusive('fastToggle', async () => {
-      const normalizedLow = validateQuality(fastToggleLow);
-      const normalizedHigh = validateQuality(fastToggleHigh);
-
-      if (!normalizedLow || !normalizedHigh) {
-        return makeResponse(false, 'fastToggle', 'Invalid fast toggle quality pair.', {
-          fastToggleLow,
-          fastToggleHigh
-        });
-      }
-      if (normalizedLow === normalizedHigh) {
-        return makeResponse(false, 'fastToggle', 'Fast toggle values must be different.', {
-          fastToggleLow: normalizedLow,
-          fastToggleHigh: normalizedHigh
-        });
-      }
-
-      const pairDetails = {
-        fastToggleLow: normalizedLow,
-        fastToggleHigh: normalizedHigh
-      };
-      const detectionResult = await detectCurrentQualityState();
-
-      if (detectionResult.ok) {
-        const detectedCurrentQuality = detectionResult.details.quality;
-        const shouldSwitchToLow = detectedCurrentQuality === normalizedHigh;
-        const targetQuality = shouldSwitchToLow ? normalizedLow : normalizedHigh;
-        const decision = shouldSwitchToLow ? 'CURRENT_HIGH_SWITCH_TO_LOW' : 'CURRENT_NOT_HIGH_SWITCH_TO_HIGH';
-
-        debug('handleFastToggleRequest: detected current quality and selected target', {
-          detectedCurrentQuality,
-          targetQuality,
-          decision
-        });
-
-        return executeSetQualityAutomation(targetQuality, pageSupport, 'fastToggle', {
-          ...pairDetails,
-          detectedCurrentQuality,
-          decision,
-          detection: detectionResult
-        });
-      }
-
-      debug('handleFastToggleRequest: current quality detection uncertain; using fallback strategy.', {
-        code: detectionResult.code,
-        message: detectionResult.message
-      });
-
-      const highFallbackResponse = await executeSetQualityAutomation(normalizedHigh, pageSupport, 'fastToggle', {
-        ...pairDetails,
-        detectedCurrentQuality: 'unknown',
-        decision: 'DETECTION_UNCERTAIN_TRY_HIGH_FIRST',
-        detection: detectionResult,
-        fallback: {
-          used: true,
-          step: 'APPLY_HIGH_FIRST'
-        }
-      });
-
-      if (!highFallbackResponse.ok) {
-        return highFallbackResponse;
-      }
-
-      if (highFallbackResponse.details && highFallbackResponse.details.resultCode === 'QUALITY_ALREADY_SET') {
-        debug('handleFastToggleRequest: fallback high was already selected; switching to low.', {
-          fastToggleLow: normalizedLow,
-          fastToggleHigh: normalizedHigh
-        });
-
-        const lowFallbackResponse = await executeSetQualityAutomation(normalizedLow, pageSupport, 'fastToggle', {
-          ...pairDetails,
-          detectedCurrentQuality: normalizedHigh,
-          decision: 'DETECTION_UNCERTAIN_HIGH_ALREADY_SELECTED_SWITCH_TO_LOW',
-          detection: detectionResult,
-          fallback: {
-            used: true,
-            step: 'APPLY_LOW_AFTER_HIGH_ALREADY_SET',
-            firstAttemptCode: highFallbackResponse.details.resultCode
-          }
-        });
-
-        if (lowFallbackResponse.ok) {
-          lowFallbackResponse.message = `Current quality was unclear; ${normalizedHigh} was already active, so switched to ${normalizedLow}.`;
-        }
-        return lowFallbackResponse;
-      }
-
-      highFallbackResponse.message = `Current quality was unclear; switched to ${normalizedHigh} as fallback.`;
-      return highFallbackResponse;
     });
   }
 
@@ -2965,6 +2906,19 @@
     });
 
     try {
+      const pluginEnabledResult = await loadPluginEnabledSetting();
+      if (!pluginEnabledResult.ok) {
+        debug('quality enforcement: plugin-enabled load failed', pluginEnabledResult.details);
+        return pluginEnabledResult;
+      }
+
+      if (!pluginEnabledResult.details?.pluginEnabled) {
+        debug('quality enforcement: skipped because plugin logic is disabled');
+        return createResult(true, 'PLUGIN_DISABLED', 'Plugin logic is disabled; skipped mode enforcement.', {
+          triggerReason
+        });
+      }
+
       const pageSupport = getPageSupportState();
       debug('quality enforcement: page support evaluated', {
         supported: pageSupport.ok,
@@ -2993,6 +2947,12 @@
       if (!modeSettingsResult.ok) {
         debug('quality enforcement: active mode load failed', modeSettingsResult.details);
         return modeSettingsResult;
+      }
+      if (modeSettingsResult.details?.pluginEnabled === false) {
+        debug('quality enforcement: plugin disabled during mode-settings load; skipping enforcement');
+        return createResult(true, 'PLUGIN_DISABLED', 'Plugin logic is disabled; skipped mode enforcement.', {
+          triggerReason
+        });
       }
 
       debug('quality enforcement: active mode loaded', modeSettingsResult.details);
@@ -3073,7 +3033,7 @@
         return;
       }
 
-      const relevantKeys = [STORAGE_KEYS.ACTIVE_MODE, STORAGE_KEYS.FAST_TOGGLE_LOW, STORAGE_KEYS.FAST_TOGGLE_HIGH].filter((key) => {
+      const relevantKeys = [STORAGE_KEYS.ACTIVE_MODE, STORAGE_KEYS.FAST_TOGGLE_LOW, STORAGE_KEYS.FAST_TOGGLE_HIGH, STORAGE_KEYS.PLUGIN_ENABLED].filter((key) => {
         return Object.prototype.hasOwnProperty.call(changes, key);
       });
       if (relevantKeys.length === 0) {
@@ -3143,6 +3103,16 @@
       const { action } = message;
       debug('Received message', { action, message, sender });
 
+      const pluginEnabledResult = await loadPluginEnabledSetting();
+      if (!pluginEnabledResult.ok) {
+        return makeResponse(false, action, pluginEnabledResult.message, pluginEnabledResult.details);
+      }
+      if (!pluginEnabledResult.details?.pluginEnabled) {
+        return makeResponse(false, action, 'Plugin logic is disabled. Turn it on in the popup to apply quality changes.', {
+          pluginEnabled: false
+        });
+      }
+
       const pageSupport = getPageSupportState();
       if (!pageSupport.ok) {
         return makeResponse(false, action, pageSupport.message, pageSupport);
@@ -3150,10 +3120,6 @@
 
       if (action === 'setQuality') {
         return handleSetQualityRequest(message.targetQuality, pageSupport);
-      }
-
-      if (action === 'fastToggle') {
-        return handleFastToggleRequest(message.fastToggleLow, message.fastToggleHigh, pageSupport);
       }
 
       return makeResponse(false, action, `Unknown action: ${action}`);
