@@ -231,6 +231,20 @@
   /** Builds a concise popup success label from structured response details. */
   function buildSuccessStatusMessage(request, response) {
     const details = response && typeof response.details === 'object' ? response.details : {};
+    const requestedQuality = sanitizeQualityValue(details.requestedQuality, '');
+    const appliedQuality = sanitizeQualityValue(details.appliedQuality || details.targetQuality, '');
+    const adjustment = details && typeof details.resolutionAdjustment === 'object' ? details.resolutionAdjustment : null;
+    const direction = adjustment && adjustment.direction === 'up' ? 'up' : adjustment && adjustment.direction === 'down' ? 'down' : '';
+
+    if (requestedQuality && appliedQuality && requestedQuality !== appliedQuality) {
+      if (direction === 'down') {
+        return `Requested ${requestedQuality} unavailable. Using highest available: ${appliedQuality}.`;
+      }
+      if (direction === 'up') {
+        return `Requested ${requestedQuality} unavailable. Using lowest available: ${appliedQuality}.`;
+      }
+      return `Requested ${requestedQuality} unavailable. Applied ${appliedQuality}.`;
+    }
 
     if (request.action === ACTION_NAMES.FAST_TOGGLE) {
       const targetQuality = sanitizeQualityValue(details.targetQuality, '');
@@ -245,7 +259,7 @@
     }
 
     if (request.action === ACTION_NAMES.SET_QUALITY) {
-      const targetQuality = sanitizeQualityValue(details.targetQuality, '');
+      const targetQuality = sanitizeQualityValue(details.appliedQuality || details.targetQuality, '');
       if (targetQuality) {
         return `Applied ${targetQuality}.`;
       }

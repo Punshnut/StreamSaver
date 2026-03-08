@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "StreamSaver",
-  "version": "0.1.0",
-  "description": "fast and easy controlling of Twitch stream quality.",
+  "version": "0.2.0",
+  "description": "fast and reliable controlling of Twitch stream quality - follow project on github: https://github.com/Punshnut/StreamSaver",
   "action": {
     "default_title": "StreamSaver",
     "default_popup": "popup.html"

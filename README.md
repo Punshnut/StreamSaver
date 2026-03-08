@@ -1,6 +1,6 @@
 # StreamSaver
 
-StreamSaver is a lightweight Chrome extension for managing stream quality on `twitch.tv`.
+StreamSaver is a lightweight Chrome extension for quickly managing stream quality on `twitch.tv`.
 
 It provides quick controls, a persistent low/high mode, and automatic re-application of your preferred quality on supported live pages.
 

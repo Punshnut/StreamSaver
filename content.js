@@ -4,6 +4,10 @@
   const SETTINGS_MENU_DEBUG_MODE = false;
   const QUALITY_VALUES = ['160p', '360p', '480p', '720p', '1080p', '1440p', '2160p', 'Source'];
   const QUALITY_SET = new Set(QUALITY_VALUES);
+  const QUALITY_ORDER_MAP = QUALITY_VALUES.reduce((acc, quality, index) => {
+    acc[quality] = index;
+    return acc;
+  }, {});
   const QUALITY_ENTRY_TERMS = ['quality', 'qualität', 'video quality', 'resolution', 'auflösung'];
   const SETTINGS_TRIGGER_TERMS = ['settings', 'einstellungen'];
   const SETTINGS_MENU_LABEL_GROUPS = {
@@ -1335,6 +1339,115 @@
     });
   }
 
+  /** Returns the configured order index for one normalized quality value. */
+  function getQualityOrder(quality) {
+    if (!QUALITY_SET.has(quality)) {
+      return -1;
+    }
+    return QUALITY_ORDER_MAP[quality];
+  }
+
+  /** Extracts numeric quality value from normalized key (e.g. "1080p" -> 1080). */
+  function parseNumericQualityValue(quality) {
+    if (!QUALITY_SET.has(quality) || quality === 'Source') {
+      return null;
+    }
+    const numeric = Number.parseInt(String(quality), 10);
+    return Number.isFinite(numeric) ? numeric : null;
+  }
+
+  /** Dedupe + sort currently visible quality levels from low to high. */
+  function collectSortedAvailableQualityLevels(options) {
+    const available = new Set();
+    for (const option of Array.isArray(options) ? options : []) {
+      const normalized = normalizeQualityLabel(option?.normalized || option?.label || '');
+      if (QUALITY_SET.has(normalized)) {
+        available.add(normalized);
+      }
+
+      // Twitch often labels the top entry like "1080p60 (Source)"; keep the concrete resolution, too.
+      const extracted = extractResolutionQuality(option?.label || '');
+      if (QUALITY_SET.has(extracted)) {
+        available.add(extracted);
+      }
+    }
+
+    return Array.from(available).sort((a, b) => getQualityOrder(a) - getQualityOrder(b));
+  }
+
+  /** Resolves boundary fallback when requested quality is outside available range. */
+  function resolveOutOfRangeQualityTarget(targetQuality, options) {
+    const normalizedTarget = normalizeQualityLabel(targetQuality);
+    if (!normalizedTarget) {
+      return createResult(false, 'INVALID_TARGET_QUALITY', 'Target quality is not recognized.', {
+        targetQuality
+      });
+    }
+
+    const availableQualities = collectSortedAvailableQualityLevels(options);
+    if (availableQualities.length === 0) {
+      return createResult(false, 'NO_QUALITY_OPTIONS', 'No quality options are available for fallback resolution.', {
+        requestedQuality: normalizedTarget
+      });
+    }
+
+    const numericAvailableQualities = availableQualities
+      .map((quality) => ({ quality, value: parseNumericQualityValue(quality) }))
+      .filter((entry) => Number.isFinite(entry.value))
+      .sort((a, b) => a.value - b.value);
+    const targetNumeric = parseNumericQualityValue(normalizedTarget);
+
+    if (Number.isFinite(targetNumeric) && numericAvailableQualities.length > 0) {
+      const lowestNumeric = numericAvailableQualities[0];
+      const highestNumeric = numericAvailableQualities[numericAvailableQualities.length - 1];
+
+      if (targetNumeric > highestNumeric.value) {
+        return createResult(true, 'QUALITY_FALLBACK_TO_HIGHEST', 'Requested quality is above available range.', {
+          requestedQuality: normalizedTarget,
+          resolvedQuality: highestNumeric.quality,
+          direction: 'down',
+          boundary: 'highest',
+          availableQualities
+        });
+      }
+
+      if (targetNumeric < lowestNumeric.value) {
+        return createResult(true, 'QUALITY_FALLBACK_TO_LOWEST', 'Requested quality is below available range.', {
+          requestedQuality: normalizedTarget,
+          resolvedQuality: lowestNumeric.quality,
+          direction: 'up',
+          boundary: 'lowest',
+          availableQualities
+        });
+      }
+    } else if (Number.isFinite(targetNumeric) && availableQualities.includes('Source')) {
+      // Fallback when only source-like entries are present and no numeric range can be inferred.
+      return createResult(true, 'QUALITY_FALLBACK_TO_HIGHEST', 'Requested quality is above available range.', {
+        requestedQuality: normalizedTarget,
+        resolvedQuality: 'Source',
+        direction: 'down',
+        boundary: 'highest',
+        availableQualities
+      });
+    }
+
+    if (normalizedTarget === 'Source' && !availableQualities.includes('Source') && numericAvailableQualities.length > 0) {
+      const highestNumeric = numericAvailableQualities[numericAvailableQualities.length - 1];
+      return createResult(true, 'QUALITY_FALLBACK_TO_HIGHEST', 'Source is unavailable; using highest available resolution.', {
+        requestedQuality: normalizedTarget,
+        resolvedQuality: highestNumeric.quality,
+        direction: 'down',
+        boundary: 'highest',
+        availableQualities
+      });
+    }
+
+    return createResult(false, 'QUALITY_TARGET_WITHIN_RANGE', 'Requested quality is within available range.', {
+      requestedQuality: normalizedTarget,
+      availableQualities
+    });
+  }
+
   /** Collects practical selection indicators from one quality menu option element. */
   function analyzeQualityOptionSelectionState(entry, label) {
     const positiveSignals = [];
@@ -1701,6 +1814,8 @@
 
     let optionsResult = null;
     let matchResult = null;
+    let effectiveTargetQuality = normalizedTarget;
+    let resolutionAdjustment = null;
 
     for (let attempt = 1; attempt <= 8; attempt += 1) {
       debug('attemptSetQuality: collecting visible quality options', { attempt });
@@ -1717,12 +1832,12 @@
 
         debug('attemptSetQuality: matching target quality', {
           attempt,
-          normalizedTarget,
+          normalizedTarget: effectiveTargetQuality,
           available: collected.details.options.map((option) => option.label),
           allowSourceAliasForTargets: Array.from(allowSourceAliasForTargets)
         });
 
-        matchResult = findBestMatchingQualityOption(normalizedTarget, collected.details.options, {
+        matchResult = findBestMatchingQualityOption(effectiveTargetQuality, collected.details.options, {
           allowSourceAliasForTargets
         });
         if (matchResult.ok) {
@@ -1742,26 +1857,75 @@
       });
     }
 
+    if ((!matchResult || !matchResult.ok) && optionsResult.ok) {
+      const fallbackTargetResult = resolveOutOfRangeQualityTarget(normalizedTarget, optionsResult.details.options);
+      if (fallbackTargetResult.ok) {
+        resolutionAdjustment = {
+          applied: true,
+          direction: fallbackTargetResult.details.direction,
+          boundary: fallbackTargetResult.details.boundary,
+          requestedQuality: normalizedTarget,
+          adjustedQuality: fallbackTargetResult.details.resolvedQuality,
+          availableQualities: fallbackTargetResult.details.availableQualities
+        };
+        effectiveTargetQuality = fallbackTargetResult.details.resolvedQuality;
+
+        debug('attemptSetQuality: strict match failed, applying boundary fallback', {
+          requestedQuality: normalizedTarget,
+          adjustedQuality: effectiveTargetQuality,
+          direction: fallbackTargetResult.details.direction,
+          availableQualities: fallbackTargetResult.details.availableQualities
+        });
+
+        matchResult = findBestMatchingQualityOption(effectiveTargetQuality, optionsResult.details.options, {
+          allowSourceAliasForTargets
+        });
+      }
+    }
+
     if (!matchResult || !matchResult.ok) {
       return createResult(false, matchResult?.code || 'QUALITY_MATCH_NOT_FOUND', matchResult?.message || `Requested ${normalizedTarget} is not available.`, {
         openResult,
+        requestedQuality: normalizedTarget,
+        targetQuality: effectiveTargetQuality,
+        appliedQuality: effectiveTargetQuality,
         options: optionsResult.details.options.map((option) => option.label),
         allowSourceAliasForTargets: Array.from(allowSourceAliasForTargets),
+        resolutionAdjustment,
         matchResult
       });
     }
 
     const targetOption = matchResult.details.option;
     if (targetOption.selected) {
-      return createResult(true, 'QUALITY_ALREADY_SET', `${normalizedTarget} is already selected.`, {
-        targetQuality: normalizedTarget,
+      if (resolutionAdjustment?.applied) {
+        const boundaryLabel = resolutionAdjustment.direction === 'down' ? 'highest available' : 'lowest available';
+        return createResult(
+          true,
+          'QUALITY_ALREADY_SET_WITH_FALLBACK',
+          `Requested ${normalizedTarget} is unavailable; ${boundaryLabel} ${effectiveTargetQuality} is already selected.`,
+          {
+            requestedQuality: normalizedTarget,
+            targetQuality: effectiveTargetQuality,
+            appliedQuality: effectiveTargetQuality,
+            selectedLabel: targetOption.label,
+            options: optionsResult.details.options.map((option) => option.label),
+            resolutionAdjustment
+          }
+        );
+      }
+
+      return createResult(true, 'QUALITY_ALREADY_SET', `${effectiveTargetQuality} is already selected.`, {
+        requestedQuality: normalizedTarget,
+        targetQuality: effectiveTargetQuality,
+        appliedQuality: effectiveTargetQuality,
         selectedLabel: targetOption.label,
         options: optionsResult.details.options.map((option) => option.label)
       });
     }
 
     debug('attemptSetQuality: clicking quality option', {
-      targetQuality: normalizedTarget,
+      targetQuality: effectiveTargetQuality,
       label: targetOption.label
     });
 
@@ -1773,26 +1937,62 @@
       });
     }
 
-    debug('attemptSetQuality: verifying selection state', { normalizedTarget });
-    const verifyResult = await verifyQualitySelection(normalizedTarget, { allowSourceAliasForTargets });
+    debug('attemptSetQuality: verifying selection state', { normalizedTarget: effectiveTargetQuality });
+    const verifyResult = await verifyQualitySelection(effectiveTargetQuality, { allowSourceAliasForTargets });
     if (!verifyResult.ok) {
       return createResult(false, verifyResult.code, verifyResult.message, {
-        targetQuality: normalizedTarget,
+        requestedQuality: normalizedTarget,
+        targetQuality: effectiveTargetQuality,
+        appliedQuality: effectiveTargetQuality,
         selectedLabel: targetOption.label,
+        resolutionAdjustment,
         verifyResult
       });
     }
 
     if (verifyResult.code === 'QUALITY_CLICKED_UNCONFIRMED') {
-      return createResult(true, 'QUALITY_APPLIED_UNCONFIRMED', `Applied ${normalizedTarget}, but verification was limited.`, {
-        targetQuality: normalizedTarget,
+      if (resolutionAdjustment?.applied) {
+        const boundaryLabel = resolutionAdjustment.direction === 'down' ? 'highest available' : 'lowest available';
+        return createResult(
+          true,
+          'QUALITY_APPLIED_UNCONFIRMED_WITH_FALLBACK',
+          `Requested ${normalizedTarget} is unavailable; applied ${boundaryLabel} ${effectiveTargetQuality}, but verification was limited.`,
+          {
+            requestedQuality: normalizedTarget,
+            targetQuality: effectiveTargetQuality,
+            appliedQuality: effectiveTargetQuality,
+            selectedLabel: targetOption.label,
+            resolutionAdjustment,
+            verifyResult
+          }
+        );
+      }
+
+      return createResult(true, 'QUALITY_APPLIED_UNCONFIRMED', `Applied ${effectiveTargetQuality}, but verification was limited.`, {
+        requestedQuality: normalizedTarget,
+        targetQuality: effectiveTargetQuality,
+        appliedQuality: effectiveTargetQuality,
         selectedLabel: targetOption.label,
         verifyResult
       });
     }
 
-    return createResult(true, 'QUALITY_APPLIED', `Applied ${normalizedTarget} successfully.`, {
-      targetQuality: normalizedTarget,
+    if (resolutionAdjustment?.applied) {
+      const boundaryLabel = resolutionAdjustment.direction === 'down' ? 'highest available' : 'lowest available';
+      return createResult(true, 'QUALITY_APPLIED_WITH_FALLBACK', `Requested ${normalizedTarget} is unavailable; applied ${boundaryLabel} ${effectiveTargetQuality}.`, {
+        requestedQuality: normalizedTarget,
+        targetQuality: effectiveTargetQuality,
+        appliedQuality: effectiveTargetQuality,
+        selectedLabel: targetOption.label,
+        resolutionAdjustment,
+        verifyResult
+      });
+    }
+
+    return createResult(true, 'QUALITY_APPLIED', `Applied ${effectiveTargetQuality} successfully.`, {
+      requestedQuality: normalizedTarget,
+      targetQuality: effectiveTargetQuality,
+      appliedQuality: effectiveTargetQuality,
       selectedLabel: targetOption.label,
       verifyResult
     });
@@ -2468,6 +2668,15 @@
     }
 
     const attemptResult = await attemptSetQuality(normalizedTarget);
+    const requestedQuality =
+      validateQuality(attemptResult?.details?.requestedQuality) || validateQuality(attemptResult?.details?.targetQuality) || normalizedTarget;
+    const appliedQuality =
+      validateQuality(attemptResult?.details?.appliedQuality) || validateQuality(attemptResult?.details?.targetQuality) || requestedQuality;
+    const resolutionAdjustment =
+      attemptResult?.details?.resolutionAdjustment && typeof attemptResult.details.resolutionAdjustment === 'object'
+        ? attemptResult.details.resolutionAdjustment
+        : null;
+
     let closeAfterResult = await closeMenusIfNeeded({
       allowBodyClick: true,
       aggressiveBodyClicks: true,
@@ -2498,7 +2707,10 @@
 
     if (!attemptResult.ok) {
       return makeResponse(false, action, attemptResult.message, {
-        targetQuality: normalizedTarget,
+        requestedQuality,
+        targetQuality: appliedQuality,
+        appliedQuality,
+        resolutionAdjustment,
         resultCode: attemptResult.code,
         step: attemptResult,
         closeBefore: closeBeforeResult,
@@ -2510,7 +2722,10 @@
     }
 
     return makeResponse(true, action, attemptResult.message, {
-      targetQuality: normalizedTarget,
+      requestedQuality,
+      targetQuality: appliedQuality,
+      appliedQuality,
+      resolutionAdjustment,
       resultCode: attemptResult.code,
       step: attemptResult,
       closeBefore: closeBeforeResult,
