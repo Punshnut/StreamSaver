@@ -1,79 +1,42 @@
 # StreamSaver
 
-StreamSaver is a lightweight Chrome extension for quickly managing stream quality on `twitch.tv`.
+Small and useful Twitch quality switcher for all Chrome-based browsers (`Chrome`, `Edge`, `Brave`, `Opera`, `Vivaldi`).
 
-It provides quick controls, a persistent low/high mode, and automatic re-application of your preferred quality on supported live pages.
+## What It Does
 
-## Why It Feels Fast
+- One-click quality switching from the popup
+- Two persistent modes: `High Quality` and `Travel / Data Saver`
+- Auto re-apply of your selected mode on Twitch live pages
+- Settings are saved in `chrome.storage.local`
 
-- One-click quality actions from the popup
-- No account/login setup
-- No build tools, no framework overhead
-- Smart automation guards (lock + debounce + cooldown) to avoid UI spam and keep actions reliable
+## Real-World Use Case: Two-Speed Streaming
 
-## Core Features
+Use StreamSaver like a two-speed mode for Twitch:
 
-- Quick Resolution buttons: `160p`, `360p`, `480p`, `720p`, `1080p`, `1440p`, `2160p`, `Source`
-- Saved mode resolutions for Low/High presets
-- Master plugin logic on/off switch (persisted)
-- Persistent mode switch:
-  - `Travel / Data Saver`
-  - `High Quality`
-- Auto-enforcement on Twitch live pages using your active mode
-- SPA-aware URL detection (keeps working when Twitch navigates without full reload)
-- Auto re-check on:
-  - initial load
-  - storage setting changes
-  - tab visible again
-  - window focus
-  - pageshow
-- Structured popup status (`loading`, `success`, `error`)
-- Quick Resolution visibility toggle (and persistence)
-- Guardrails for unsupported pages (home, clips, directory, non-live subpages, etc.)
-- Fallback logic when current quality detection is uncertain
+- `High Quality` (`1080p`/`Source`) for home and work
+- `Travel / Data Saver` (`360p`/`480p`) for hotspot, background streams, gaming, or second-monitor use
 
-## Mode Behavior (Simple)
+Switch with one click as your network changes, and StreamSaver keeps your preference consistent across live pages.
 
-- `low` mode enforces your saved low-mode resolution (`fastToggleLow`)
-- `high` mode enforces your saved high-mode resolution (`fastToggleHigh`)
-- Defaults:
-  - `fastToggleLow = 480p`
-  - `fastToggleHigh = Source`
-  - `activeMode = high`
-  - `pluginEnabled = true`
+All available resolutions are selectable, so you can shape the setup exactly how you want. Happy viewing!
 
-All settings are stored in `chrome.storage.local`, so they survive popup close, tab reload, and browser restart.
+## Install (Chrome-Based Browsers)
 
-## Install (Local Chrome)
-
-1. Open `chrome://extensions`
+1. Open your extensions page (`chrome://extensions` for Chrome/Brave/Opera/Vivaldi, `edge://extensions` for Edge).
 2. Enable **Developer mode**
 3. Click **Load unpacked**
 4. Select this `StreamSaver` folder
-5. Open a Twitch live stream page and use the extension popup
 
-## What It's For
+## Limits
 
-Use StreamSaver when you want simple, predictable stream quality control without opening Twitch settings every time.
-
-- Reduce buffering quickly when your connection drops
-- Save mobile/hotspot data with a lower default quality
-- Return to high quality with one click when bandwidth is stable
-- Keep your preferred mode active across reloads and new stream pages
-- Spend less time adjusting settings manually
+- Twitch only: `https://www.twitch.tv/*`
+- Twitch UI changes can require updates
+- Some quality levels may be unavailable per stream/transcoder conditions
 
 ## Support
 
-If StreamSaver helps you, you can support the project here:
+[Ko-Fi](https://ko-fi.com/janfeuerbacher)
 
-- [Ko-Fi](https://ko-fi.com/janfeuerbacher)
-
-## Known Limits
-
-- Twitch only: `https://www.twitch.tv/*`
-- Depends on Twitch DOM/UI structure (Twitch updates can require selector fixes)
-- Some quality levels may be unavailable per stream/transcoder conditions
-
-## Note
+## Disclaimer
 
 StreamSaver is an independent project and is not affiliated with Twitch.
