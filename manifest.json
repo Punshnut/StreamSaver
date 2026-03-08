@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "StreamSaver",
+  "version": "0.1.0",
+  "description": "fast and easy controlling of Twitch stream quality.",
+  "action": {
+    "default_title": "StreamSaver",
+    "default_popup": "popup.html"
+  },
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.twitch.tv/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.twitch.tv/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

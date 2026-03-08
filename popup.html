@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StreamSaver</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <!-- Decorative background layer -->
+      <div class="bg-grid" aria-hidden="true"></div>
+
+      <!-- Branding / header -->
+      <header class="hero">
+        <div class="hero-head">
+          <div class="hero-copy">
+            <p class="eyebrow">LIVE CONTROL DECK</p>
+            <h1 class="title">StreamSaver</h1>
+            <p class="subtitle">Fast and reliable Twitch quality controls</p>
+          </div>
+        </div>
+      </header>
+
+      <!-- Active mode switch -->
+      <section class="panel" aria-label="Mode">
+        <h2>Mode</h2>
+        <div class="mode-toggle" role="group" aria-label="StreamSaver mode">
+          <button type="button" id="mode-low-btn" class="mode-btn" data-mode="low">Travel / Data Saver</button>
+          <button type="button" id="mode-high-btn" class="mode-btn" data-mode="high">High Quality</button>
+        </div>
+        <p id="mode-summary" class="mode-summary">Current mode: High Quality</p>
+      </section>
+
+      <!-- Optional one-click quality buttons -->
+      <section class="panel" aria-label="Quick Resolution">
+        <div class="panel-head">
+          <h2>Quick Resolution</h2>
+          <label class="inline-toggle" for="quick-resolution-visible">
+            <input
+              type="checkbox"
+              id="quick-resolution-visible"
+              name="quickResolutionVisible"
+              aria-controls="quick-resolution-content"
+            />
+            <span>Show</span>
+          </label>
+        </div>
+        <div id="quick-resolution-content" class="quick-resolution-content" hidden>
+          <div class="quality-grid">
+            <button type="button" class="quality-btn" data-quality="160p">160p</button>
+            <button type="button" class="quality-btn" data-quality="360p">360p</button>
+            <button type="button" class="quality-btn" data-quality="480p">480p</button>
+            <button type="button" class="quality-btn" data-quality="720p">720p</button>
+            <button type="button" class="quality-btn" data-quality="1080p">1080p</button>
+            <button type="button" class="quality-btn" data-quality="1440p">1440p</button>
+            <button type="button" class="quality-btn" data-quality="2160p">2160p</button>
+            <button type="button" class="quality-btn" data-quality="Source">Source</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Saved low/high preset toggle -->
+      <section class="panel" aria-label="Fast Toggle">
+        <h2>Fast Toggle</h2>
+        <div class="row">
+          <label for="fastToggleLow">Low</label>
+          <select id="fastToggleLow" name="fastToggleLow">
+            <option value="160p">160p</option>
+            <option value="360p">360p</option>
+            <option value="480p" selected>480p</option>
+            <option value="720p">720p</option>
+            <option value="1080p">1080p</option>
+            <option value="1440p">1440p</option>
+            <option value="2160p">2160p</option>
+            <option value="Source">Source</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="fastToggleHigh">High</label>
+          <select id="fastToggleHigh" name="fastToggleHigh">
+            <option value="160p">160p</option>
+            <option value="360p">360p</option>
+            <option value="480p">480p</option>
+            <option value="720p">720p</option>
+            <option value="1080p">1080p</option>
+            <option value="1440p">1440p</option>
+            <option value="2160p">2160p</option>
+            <option value="Source" selected>Source</option>
+          </select>
+        </div>
+        <button type="button" id="fast-toggle-btn" class="primary-btn">Fast Toggle</button>
+      </section>
+
+      <!-- Support CTA -->
+      <div class="support-row">
+        <p class="support-copy">Support StreamSaver</p>
+        <a
+          class="donate-btn"
+          href="https://ko-fi.com/janfeuerbacher"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Donate to support StreamSaver"
+          >Donate</a>
+      </div>
+
+      <!-- Runtime status feedback -->
+      <div id="status" class="status" data-state="loading">Loading popup...</div>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
