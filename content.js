@@ -49,7 +49,7 @@
     urlWatchTimerId: null
   };
 
-  // Safety guard: run only on twitch.tv.
+  // Guard: run only on twitch.tv hosts.
   if (!location.hostname.endsWith('twitch.tv')) {
     return;
   }
@@ -69,7 +69,7 @@
     return { ok, code, message, details };
   }
 
-  /** Converts internal payloads into JSON-safe values for runtime messaging. */
+  /** Serializes values into message-safe JSON data. */
   function serializeForMessage(value, depth = 0, seen = new WeakSet()) {
     if (depth > 8) {
       return '[MaxDepth]';
@@ -279,6 +279,7 @@
   /** Infers which concrete resolutions are represented by source-like menu labels. */
   function inferSourceAliasTargets(qualityEntryLabel, options = []) {
     const inferred = new Set();
+    // Add source-like labels only when they include a concrete resolution.
     const maybeAdd = (label) => {
       if (!labelHasSourceAlias(label)) {
         return;
@@ -315,7 +316,7 @@
       matchedBy.push('sourceLabel');
     }
 
-    // Prefer explicit quality labels, but allow language-agnostic resolution/source hints.
+    // Prefer explicit quality terms, but allow resolution+source hints.
     const isQualityEntry =
       matchedBy.includes('qualityLabel') ||
       (matchedBy.includes('resolutionValue') && matchedBy.includes('sourceLabel'));
@@ -331,7 +332,7 @@
     }
 
     if (normalizedTarget === 'Source') {
-      // Twitch may label source as Source, Quelle, or Chunked.
+      // Source can appear as Source, Quelle, or Chunked.
       return labelHasSourceAlias(lower);
     }
 
@@ -377,7 +378,7 @@
     return createResult(false, 'PLAYER_NOT_FOUND', 'No visible Twitch player root was found.');
   }
 
-  /** Collects currently visible menu/listbox style overlay roots. */
+  /** Collects visible menu-like overlay roots. */
   function findVisibleMenuRoots() {
     const selectors = [
       '[role="menu"]',
@@ -410,7 +411,7 @@
     return roots;
   }
 
-  /** Fallback detector for Twitch settings-like containers by visible text semantics. */
+  /** Fallback finder for settings-like containers by visible text. */
   function findSettingsMenuRootsByText() {
     const selector = 'div, section, [role="dialog"], [data-a-target], [class*="menu" i]';
     const raw = [];
@@ -769,6 +770,7 @@
       .replace(/\s+/g, ' ')
       .trim()
       .toLowerCase();
+    // Check entry labels and full menu text because Twitch markup varies.
     const containsTerm = (terms) => {
       return terms.some((term) => loweredEntries.some((text) => text.includes(term)) || rootTextLower.includes(term));
     };
@@ -1331,7 +1333,7 @@
     return Array.isArray(options) ? options.map((option) => compactSelectionPreview(option)) : [];
   }
 
-  /** Standardized unknown-current-quality response used by detection fallbacks. */
+  /** Creates a consistent unknown-quality result payload. */
   function createUnknownCurrentQualityResult(message, reason, options, extraDetails = {}) {
     return createResult(false, 'CURRENT_QUALITY_UNKNOWN', message, {
       quality: 'unknown',
@@ -1358,7 +1360,7 @@
     return Number.isFinite(numeric) ? numeric : null;
   }
 
-  /** Dedupe + sort currently visible quality levels from low to high. */
+  /** Deduplicates and sorts visible quality levels from low to high. */
   function collectSortedAvailableQualityLevels(options) {
     const available = new Set();
     for (const option of Array.isArray(options) ? options : []) {
@@ -1367,7 +1369,7 @@
         available.add(normalized);
       }
 
-      // Twitch often labels the top entry like "1080p60 (Source)"; keep the concrete resolution, too.
+      // Source-like labels can still contain a concrete resolution (e.g. 1080p60).
       const extracted = extractResolutionQuality(option?.label || '');
       if (QUALITY_SET.has(extracted)) {
         available.add(extracted);
@@ -1423,7 +1425,7 @@
         });
       }
     } else if (Number.isFinite(targetNumeric) && availableQualities.includes('Source')) {
-      // Fallback when only source-like entries are present and no numeric range can be inferred.
+      // Fallback when only source-like entries are available.
       return createResult(true, 'QUALITY_FALLBACK_TO_HIGHEST', 'Requested quality is above available range.', {
         requestedQuality: normalizedTarget,
         resolvedQuality: 'Source',
@@ -1456,10 +1458,12 @@
     const negativeSignals = [];
     let score = 0;
 
+    // Use weighted signals to resolve conflicting selection indicators.
     const addPositive = (signal, weight) => {
       positiveSignals.push(signal);
       score += weight;
     };
+    // Negative signals lower confidence for this option.
     const addNegative = (signal, weight) => {
       negativeSignals.push(signal);
       score -= weight;
@@ -1794,7 +1798,7 @@
     });
   }
 
-  /** End-to-end quality selection attempt inside Twitch player menus. */
+  /** Runs a full quality selection attempt in Twitch player menus. */
   async function attemptSetQuality(targetQuality) {
     const normalizedTarget = normalizeQualityLabel(targetQuality);
     if (!normalizedTarget) {
@@ -2341,6 +2345,7 @@
 
         const menuRoots = findVisibleMenuRoots();
         const menuRects = menuRoots.map((root) => root.getBoundingClientRect());
+        // Skip points inside open menus to avoid accidental selection.
         const pointInsideAnyMenu = (point) => {
           return menuRects.some((rect) => {
             return point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom;
@@ -3094,6 +3099,7 @@
     });
   }
 
+  /** Main popup/content bridge that validates requests before entering automation flow. */
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       if (!message || typeof message !== 'object' || typeof message.action !== 'string') {
@@ -3143,7 +3149,7 @@
     delayMs: 900
   });
 
-  // Startup check for player readiness.
+  // Startup probe for visible player readiness.
   waitForCondition(() => getPlayerRoot().ok, {
     timeoutMs: 3000,
     intervalMs: 150,
