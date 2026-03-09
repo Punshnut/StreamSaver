@@ -32,6 +32,7 @@ All available resolutions are selectable, so you can shape the setup exactly how
 - Twitch only: `https://www.twitch.tv/*`
 - Twitch UI changes can require updates
 - Some quality levels may be unavailable per stream/transcoder conditions
+- The settings menu may briefly pop open while applying the selected resolution; this is expected behavior for now
 
 ## Support
 
