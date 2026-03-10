@@ -34,6 +34,9 @@
   };
   const READY_STATUS_MESSAGE = 'Ready. Manage mode or switch resolutions manually.';
   const DISABLED_STATUS_MESSAGE = 'Plugin logic is disabled. Settings are saved but Twitch quality is unchanged.';
+  const OPEN_TWITCH_STREAM_STATUS_MESSAGE = 'Open a live Twitch stream on www.twitch.tv to control quality.';
+  const RELOAD_TWITCH_TAB_STATUS_MESSAGE = 'Reload the Twitch tab and try again.';
+  const UNSUPPORTED_TWITCH_HOST_STATUS_MESSAGE = 'This Twitch tab is unsupported. Open a stream on www.twitch.tv.';
 
   const statusEl = document.getElementById('status');
   const popupRoot = document.querySelector('.popup');
@@ -56,6 +59,8 @@
   let currentActiveMode = DEFAULT_SETTINGS[SETTINGS_KEYS.ACTIVE_MODE];
   let isQuickResolutionVisible = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.QUICK_RESOLUTION_VISIBLE]);
   let isPluginEnabled = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.PLUGIN_ENABLED]);
+  let idleStatusType = STATUS_TYPES.SUCCESS;
+  let idleStatusMessage = READY_STATUS_MESSAGE;
 
   console.log('[StreamSaver][popup] Popup loaded');
 
@@ -75,11 +80,17 @@
 
     if (autoResetMs > 0) {
       statusResetTimer = setTimeout(() => {
-        statusEl.dataset.state = STATUS_TYPES.SUCCESS;
-        statusEl.textContent = isPluginEnabled ? READY_STATUS_MESSAGE : DISABLED_STATUS_MESSAGE;
+        statusEl.dataset.state = idleStatusType;
+        statusEl.textContent = idleStatusMessage;
         statusResetTimer = null;
       }, autoResetMs);
     }
+  }
+
+  /** Stores the default status shown after temporary status updates expire. */
+  function setIdleStatus(type, message) {
+    idleStatusType = type;
+    idleStatusMessage = message;
   }
 
   /** Toggles all popup action buttons. */
@@ -156,6 +167,8 @@
     if (pluginEnabledLabel instanceof HTMLElement) {
       pluginEnabledLabel.textContent = nextEnabled ? 'Enabled' : 'Disabled';
     }
+
+    setIdleStatus(STATUS_TYPES.SUCCESS, nextEnabled ? READY_STATUS_MESSAGE : DISABLED_STATUS_MESSAGE);
   }
 
   /** Returns the display label for a mode key. */
@@ -166,6 +179,11 @@
   /** True when a URL points to any Twitch page/subdomain. */
   function isTwitchUrl(url) {
     return typeof url === 'string' && /^https:\/\/([a-z0-9-]+\.)?twitch\.tv\//i.test(url);
+  }
+
+  /** True when URL matches the host where this extension injects content scripts. */
+  function isInjectableTwitchUrl(url) {
+    return typeof url === 'string' && /^https:\/\/www\.twitch\.tv\//i.test(url);
   }
 
   /** Reads the currently focused browser tab in the current window. */
@@ -210,23 +228,119 @@
   function mapDispatchErrorToUserMessage(errorMessage) {
     const normalized = String(errorMessage || '').toLowerCase();
 
+    if (normalized.includes('active tab is not a supported twitch host')) {
+      return UNSUPPORTED_TWITCH_HOST_STATUS_MESSAGE;
+    }
+
+    if (normalized.includes('active tab is not twitch.tv')) {
+      return OPEN_TWITCH_STREAM_STATUS_MESSAGE;
+    }
+
     if (normalized.includes('receiving end does not exist')) {
-      return 'Open a Twitch tab and try again.';
+      return `No StreamSaver connection in this tab. ${OPEN_TWITCH_STREAM_STATUS_MESSAGE} ${RELOAD_TWITCH_TAB_STATUS_MESSAGE}`;
     }
 
     if (normalized.includes('cannot access contents of url')) {
-      return 'This page is not supported. Open a Twitch tab and try again.';
+      return `This page cannot be controlled by StreamSaver. ${OPEN_TWITCH_STREAM_STATUS_MESSAGE}`;
     }
 
     if (normalized.includes('cannot access a chrome:// url')) {
       return 'This tab cannot run StreamSaver. Open a Twitch stream tab.';
     }
 
-    if (normalized.includes('active tab is not twitch.tv')) {
-      return 'Active tab is not Twitch. Open a Twitch stream tab.';
+    if (normalized.includes('no active browser tab found')) {
+      return OPEN_TWITCH_STREAM_STATUS_MESSAGE;
     }
 
     return `Request failed: ${errorMessage}`;
+  }
+
+  /** Maps content-script probe responses into a contextual idle status. */
+  function mapProbeResponseToIdleStatus(response) {
+    const message = response && typeof response.message === 'string' ? response.message : '';
+    const normalized = message.toLowerCase();
+
+    if (normalized.includes('plugin logic is disabled')) {
+      return {
+        type: STATUS_TYPES.SUCCESS,
+        message: DISABLED_STATUS_MESSAGE
+      };
+    }
+
+    const unsupportedPageSignals = [
+      'not a supported stream player page',
+      'are not supported',
+      'not a live player view',
+      'no visible player detected',
+      'no twitch player found'
+    ];
+
+    if (unsupportedPageSignals.some((signal) => normalized.includes(signal))) {
+      return {
+        type: STATUS_TYPES.ERROR,
+        message: 'Twitch is open, but no live stream player was found. Open a live stream and try again.'
+      };
+    }
+
+    return {
+      type: STATUS_TYPES.SUCCESS,
+      message: READY_STATUS_MESSAGE
+    };
+  }
+
+  /** Detects active-tab readiness and updates the popup's idle status message. */
+  async function refreshIdleStatus(showImmediately = true) {
+    let nextStatus = {
+      type: STATUS_TYPES.SUCCESS,
+      message: isPluginEnabled ? READY_STATUS_MESSAGE : DISABLED_STATUS_MESSAGE
+    };
+
+    if (!isPluginEnabled) {
+      setIdleStatus(nextStatus.type, nextStatus.message);
+      if (showImmediately && !isActionInFlight) {
+        setStatus(nextStatus.type, nextStatus.message);
+      }
+      return nextStatus;
+    }
+
+    try {
+      const activeTab = await getActiveTab();
+      const tabUrl = typeof activeTab.url === 'string' ? activeTab.url : '';
+
+      if (!isTwitchUrl(tabUrl)) {
+        nextStatus = {
+          type: STATUS_TYPES.ERROR,
+          message: OPEN_TWITCH_STREAM_STATUS_MESSAGE
+        };
+      } else if (!isInjectableTwitchUrl(tabUrl)) {
+        nextStatus = {
+          type: STATUS_TYPES.ERROR,
+          message: UNSUPPORTED_TWITCH_HOST_STATUS_MESSAGE
+        };
+      } else {
+        try {
+          const probeResponse = await sendMessageToTab(activeTab.id, { action: 'streamsaverPopupProbe' });
+          nextStatus = mapProbeResponseToIdleStatus(probeResponse);
+        } catch (error) {
+          nextStatus = {
+            type: STATUS_TYPES.ERROR,
+            message: mapDispatchErrorToUserMessage(error.message)
+          };
+        }
+      }
+    } catch (error) {
+      nextStatus = {
+        type: STATUS_TYPES.ERROR,
+        message: mapDispatchErrorToUserMessage(error.message)
+      };
+    }
+
+    setIdleStatus(nextStatus.type, nextStatus.message);
+    if (showImmediately && !isActionInFlight) {
+      setStatus(nextStatus.type, nextStatus.message);
+    }
+
+    return nextStatus;
   }
 
   /** Dispatches one message to the active Twitch tab only. */
@@ -235,6 +349,9 @@
 
     if (activeTab.url && !isTwitchUrl(activeTab.url)) {
       throw new Error('Active tab is not twitch.tv.');
+    }
+    if (activeTab.url && !isInjectableTwitchUrl(activeTab.url)) {
+      throw new Error('Active tab is not a supported Twitch host.');
     }
 
     return sendMessageToTab(activeTab.id, message);
@@ -431,7 +548,7 @@
         quickResolutionVisible,
         pluginEnabled
       });
-      setStatus(STATUS_TYPES.SUCCESS, isPluginEnabled ? READY_STATUS_MESSAGE : DISABLED_STATUS_MESSAGE);
+      await refreshIdleStatus(true);
     } catch (error) {
       console.error('[StreamSaver][popup] Failed to load settings:', error);
       fastToggleLow.value = DEFAULT_SETTINGS[SETTINGS_KEYS.LOW];
@@ -501,6 +618,8 @@
         setPluginEnabledState(previousEnabled);
         return;
       }
+
+      await refreshIdleStatus(false);
 
       if (!nextEnabled) {
         return;
