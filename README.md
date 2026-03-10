@@ -7,7 +7,7 @@ Small and useful Twitch quality switcher for all Chrome-based browsers (`Chrome`
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/macOS-native-000000?style=flat&logo=apple" alt="macOS native">
+  <img src="https://img.shields.io/badge/browser%20extension-8A2BE2" alt="macOS native">
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT">
 </p>
 
