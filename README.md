@@ -2,6 +2,22 @@
 
 Small and useful Twitch quality switcher for all Chrome-based browsers (`Chrome`, `Edge`, `Brave`, `Opera`, `Vivaldi`, `Arc`).
 
+<p align="center">
+  <img src="media/StreamSaverLogo.png" alt="Launchy logo" width="260">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/macOS-native-000000?style=flat&logo=apple" alt="macOS native">
+  <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT">
+</p>
+
+<p align="center">
+    <a href="https://github.com/Punshnut/macos-launchy/releases/latest">
+    <img src="https://img.shields.io/badge/Download-Latest-blueviolet?style=for-the-badge" alt="Download Latest">
+  </a>
+</p>
+
+
 ## What It Does
 
 - One-click quality switching from the popup
