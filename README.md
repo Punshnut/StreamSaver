@@ -3,20 +3,35 @@
 Small and useful Twitch quality switcher for all Chrome-based browsers (`Chrome`, `Edge`, `Brave`, `Opera`, `Vivaldi`, `Arc`).
 
 <p align="center">
-  <img src="media/StreamSaverLogo.png" alt="Launchy logo" width="260">
+  <img src="media/StreamSaverLogo.png" alt="StreamSaver logo" width="260">
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/browser%20extension-8A2BE2" alt="macOS native">
+  <img src="https://img.shields.io/badge/browser%20extension-8A2BE2" alt="Browser extension">
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT">
 </p>
 
 <p align="center">
-    <a href="https://github.com/Punshnut/macos-launchy/releases/latest">
+    <a href="https://github.com/Punshnut/StreamSaver/releases/latest">
     <img src="https://img.shields.io/badge/Download-Latest-blueviolet?style=for-the-badge" alt="Download Latest">
   </a>
 </p>
 
+## Install (Chrome-Based Browsers)
+
+No coding is required. You are just loading the extension folder into your browser.
+
+1. Download the latest release ZIP from the button above.
+2. Open your Downloads folder and **extract / unzip** the ZIP file.
+3. Open the extracted `StreamSaver` folder and make sure it contains `manifest.json`.
+4. Open your browser's extensions page:
+   - `chrome://extensions` for Chrome, Brave, Opera, Vivaldi, and Arc
+   - `edge://extensions` for Edge
+5. Enable **Developer mode**.
+6. Click **Load unpacked**.
+7. Select the **extracted `StreamSaver` folder** from step 2.
+
+Important: do not select the ZIP file itself. You must extract it first, then import the folder created from that ZIP.
 
 ## What It Does
 
@@ -36,13 +51,6 @@ Switch with one click as your network changes, and StreamSaver keeps your prefer
 
 All available resolutions are selectable, so you can shape the setup exactly how you want. Happy viewing!
 
-## Install (Chrome-Based Browsers)
-
-1. Open your extensions page (`chrome://extensions` for Chrome/Brave/Opera/Vivaldi, `edge://extensions` for Edge).
-2. Enable **Developer mode**
-3. Click **Load unpacked**
-4. Select this `StreamSaver` folder
-
 ## Limits
 
 - Twitch only: `https://www.twitch.tv/*`
@@ -57,3 +65,7 @@ All available resolutions are selectable, so you can shape the setup exactly how
 ## Disclaimer
 
 StreamSaver is an independent project and is not affiliated with Twitch.
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Punshnut/StreamSaver&type=Date)](https://www.star-history.com/#Punshnut/StreamSaver&Date)
