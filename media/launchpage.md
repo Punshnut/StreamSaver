@@ -15,7 +15,7 @@ Install StreamSaver
 View on GitHub
 
 ### Social Proof Line
-Built for Chrome, Edge, Brave, Opera, Vivaldi, and Arc.
+Built for Chrome, Edge, Brave, Opera, Vivaldi, Arc, Zen, and Firefox.
 
 ---
 
@@ -85,7 +85,7 @@ Built for Twitch UI Reality, Not Ideal Conditions
 Where StreamSaver Works Best
 
 - Supports Twitch live pages on `https://www.twitch.tv/*`
-- Designed for Chromium-based browsers
+- Works across all major desktop browsers
 - Works best when a visible live player is present
 
 ### H3
@@ -103,12 +103,19 @@ Current Known Limits
 ### H2
 Install StreamSaver in Under a Minute
 
+**Chrome, Edge, Brave, Opera, Vivaldi, Arc, and Zen:**
+
 1. Open your extensions page:
-   - `chrome://extensions` (Chrome, Brave, Opera, Vivaldi, Arc)
+   - `chrome://extensions` (Chrome, Brave, Opera, Vivaldi, Arc, Zen)
    - `edge://extensions` (Microsoft Edge)
 2. Enable **Developer mode**.
 3. Click **Load unpacked**.
 4. Select the `StreamSaver` folder.
+
+**Firefox:**
+
+1. Download the latest `streamsaver-firefox-vX.X.xpi` from the releases page.
+2. Open the file — Firefox will prompt you to install it directly.
 
 ---
 
@@ -127,7 +134,7 @@ Yes. Use the **Plugin logic** toggle in the popup to disable automated quality c
 Live-player automation is focused on supported live stream views on `www.twitch.tv`; non-live sections are not the primary target.
 
 ### Which browsers support StreamSaver?
-StreamSaver supports Chromium-based browsers including Chrome, Edge, Brave, Opera, Vivaldi, and Arc.
+StreamSaver supports Chrome, Edge, Brave, Opera, Vivaldi, Arc, Zen, and Firefox.
 
 ### Is StreamSaver affiliated with Twitch?
 No. StreamSaver is an independent project and is not affiliated with Twitch.
