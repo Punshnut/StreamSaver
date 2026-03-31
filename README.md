@@ -1,6 +1,6 @@
 # StreamSaver
 
-Small and useful Twitch quality switcher for `Chrome`, `Edge`, `Brave`, `Opera`, `Vivaldi`, `Arc`, `Zen`, and `Firefox`.
+Persistent Twitch quality control: lock resolutions, toggle presets, auto-reapply. No more manual resets - across Chrome, Edge, Brave, Opera, Vivaldi, Arc, Zen, and Firefox
 
 <p align="center">
   <img src="media/StreamSaverLogo.png" alt="StreamSaver logo" width="260">

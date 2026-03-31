@@ -86,7 +86,7 @@ Where StreamSaver Works Best
 
 - Supports Twitch live pages on `https://www.twitch.tv/*`
 - Works across all major desktop browsers
-- Works best when a visible live player is present
+- Best when a visible live player is present
 
 ### H3
 Current Known Limits
@@ -103,19 +103,19 @@ Current Known Limits
 ### H2
 Install StreamSaver in Under a Minute
 
-**Chrome, Edge, Brave, Opera, Vivaldi, Arc, and Zen:**
+**Chrome, Edge, Brave, Opera, Vivaldi, and Arc:**
 
 1. Open your extensions page:
-   - `chrome://extensions` (Chrome, Brave, Opera, Vivaldi, Arc, Zen)
+   - `chrome://extensions` (Chrome, Brave, Opera, Vivaldi, Arc)
    - `edge://extensions` (Microsoft Edge)
 2. Enable **Developer mode**.
 3. Click **Load unpacked**.
 4. Select the `StreamSaver` folder.
 
-**Firefox:**
+**Firefox & Zen:**
 
 1. Download the latest `streamsaver-firefox-vX.X.xpi` from the releases page.
-2. Open the file — Firefox will prompt you to install it directly.
+2. Open the file - Firefox will prompt you to install it directly.
 
 ---
 
