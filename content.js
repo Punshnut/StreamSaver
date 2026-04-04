@@ -48,6 +48,11 @@
     lastResolvedTargetQuality: '',
     urlWatchTimerId: null
   };
+  const fullscreenState = {
+    userIntended: false,       // user explicitly entered fullscreen
+    restorationAttempts: 0,
+    restorationInProgress: false
+  };
 
   // Guard: run only on twitch.tv hosts.
   if (!location.hostname.endsWith('twitch.tv')) {
@@ -2329,6 +2334,29 @@
 
       // Last resort: click inside player area to avoid navigation.
       if (allowBodyClick && !playerClickAttempted && (aggressiveBodyClicks || attempt >= 2)) {
+        // In fullscreen, body clicks on the player trigger Twitch's exit-fullscreen handler.
+        // Hover to reveal controls first, then use the settings gear toggle as a safe alternative.
+        if (isBrowserInFullscreen()) {
+          playerClickAttempted = true;
+          const fsPlayerResult = getPlayerRoot();
+          if (fsPlayerResult.ok && fsPlayerResult.details?.element) {
+            triggerPlayerHover(fsPlayerResult.details.element);
+            await wait(200);
+          }
+          const fsToggleResult = tryCloseViaSettingsToggle();
+          if (fsToggleResult.ok) {
+            await wait(100);
+            if (getMenuCount() === 0) {
+              debug('closeMenusIfNeeded: fullscreen — closed via hover + settings toggle', { attempt });
+              return createResult(true, 'MENUS_CLOSED', 'Menus closed successfully.', {
+                attempts: attempt,
+                closedBy: 'fullscreen-hover-settings-toggle'
+              });
+            }
+          }
+          await wait(80);
+          continue;
+        }
         playerClickAttempted = true;
         const playerRootResult = getPlayerRoot();
         if (!playerRootResult.ok || !(playerRootResult.details?.element instanceof Element)) {
@@ -2903,6 +2931,11 @@
       });
     }
 
+    if (isBrowserInFullscreen()) {
+      debug('quality enforcement: skipped because document is in fullscreen mode', { triggerReason });
+      return createResult(false, 'FULLSCREEN_ACTIVE', 'Quality enforcement skipped while in fullscreen mode.');
+    }
+
     enforcementState.inProgress = true;
     debug('quality enforcement: run started', {
       triggerReason,
@@ -2965,7 +2998,21 @@
       const resolvedTarget = resolveTargetQualityForMode(modeSettingsResult.details);
       debug('quality enforcement: desired target quality resolved', resolvedTarget);
 
+      // Re-check: user may have entered fullscreen during the async setup phase above
+      if (isBrowserInFullscreen()) {
+        debug('quality enforcement: aborted before DOM manipulation — entered fullscreen during setup', { triggerReason });
+        return createResult(false, 'FULLSCREEN_ACTIVE', 'Quality enforcement aborted — entered fullscreen during setup.');
+      }
+
       const currentQualityResult = await detectCurrentQualityState();
+
+      // Re-check: detectCurrentQualityState() opens/closes menus and is async;
+      // user may have entered fullscreen during that window.
+      if (isBrowserInFullscreen()) {
+        debug('quality enforcement: aborted after quality detection — entered fullscreen during detection', { triggerReason });
+        return createResult(false, 'FULLSCREEN_ACTIVE', 'Quality enforcement aborted — entered fullscreen during quality detection.');
+      }
+
       if (currentQualityResult.ok) {
         const detectedCurrentQuality = currentQualityResult.details?.quality;
         debug('quality enforcement: current quality detected', {
@@ -3031,6 +3078,94 @@
     }
   }
 
+  /** Returns true when the browser's fullscreen API has an active element. */
+  function isBrowserInFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+
+  /**
+   * Finds the Twitch fullscreen toggle button inside the player.
+   * Returns the element or null if not found.
+   */
+  function findTwitchFullscreenButton() {
+    const result = getPlayerRoot();
+    if (!result.ok || !result.details?.element) {
+      return null;
+    }
+    const playerRoot = result.details.element;
+    for (const btn of Array.from(playerRoot.querySelectorAll('button, [role="button"]'))) {
+      if (!isElementVisible(btn)) {
+        continue;
+      }
+      const combined = [
+        btn.getAttribute('aria-label') || '',
+        btn.getAttribute('title') || '',
+        btn.getAttribute('data-a-target') || ''
+      ].join(' ').toLowerCase();
+      if (combined.includes('fullscreen') || combined.includes('vollbild')) {
+        return btn;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Attempts to restore browser fullscreen after the extension accidentally
+   * caused Twitch to drop from fullscreen to cinema/theater mode.
+   * Tries requestFullscreen() on the player directly first; falls back to
+   * clicking Twitch's "Enter Fullscreen" button.
+   */
+  async function attemptRestoreTwitchFullscreen() {
+    if (isBrowserInFullscreen()) {
+      debug('fullscreen restore: already in fullscreen, nothing to do');
+      return;
+    }
+
+    const playerRootResult = getPlayerRoot();
+    if (!playerRootResult.ok || !playerRootResult.details?.element) {
+      debug('fullscreen restore: player not found');
+      return;
+    }
+    const playerRoot = playerRootResult.details.element;
+
+    // Hover to reveal controls, then click Twitch's own fullscreen button.
+    // Letting Twitch handle the requestFullscreen() call internally ensures it uses
+    // the right element and applies the correct layout — direct API calls cause a
+    // partial layout glitch (bottom ~20% dark, player shifted up).
+    triggerPlayerHover(playerRoot);
+    await wait(600);
+
+    const btn = findTwitchFullscreenButton();
+    if (!btn) {
+      debug('fullscreen restore: fullscreen button not found, falling back to requestFullscreen()');
+      try {
+        const requestFn = playerRoot.requestFullscreen?.bind(playerRoot)
+          || playerRoot.webkitRequestFullscreen?.bind(playerRoot);
+        if (requestFn) {
+          await requestFn();
+          debug('fullscreen restore: requestFullscreen() fallback succeeded');
+        }
+      } catch (err) {
+        debug('fullscreen restore: requestFullscreen() fallback also failed', String(err));
+      }
+      return;
+    }
+
+    const combined = [
+      btn.getAttribute('aria-label') || '',
+      btn.getAttribute('title') || ''
+    ].join(' ').toLowerCase();
+
+    // 'exit' / 'beenden' means Twitch already considers itself in fullscreen — skip.
+    if (combined.includes('exit') || combined.includes('beenden')) {
+      debug('fullscreen restore: button is in exit-fullscreen state, skipping');
+      return;
+    }
+
+    debug('fullscreen restore: clicking button to restore', { label: btn.getAttribute('aria-label') });
+    clickElementSafely(btn, { prepare: false });
+  }
+
   /** Registers storage/navigation/focus hooks that keep mode quality enforced. */
   function setupAutomaticModeEnforcement() {
     chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -3086,9 +3221,58 @@
     window.addEventListener('focus', () => {
       debug('quality enforcement: window focused');
       scheduleEnsureDesiredQualityForCurrentMode('window-focus', {
-        delayMs: 250
+        delayMs: 500
       });
     });
+
+    function onFullscreenChange() {
+      const isFullscreen = isBrowserInFullscreen();
+      debug('quality enforcement: fullscreenchange', { isFullscreen });
+      if (isFullscreen) {
+        // User entered fullscreen — remember intent and reset restoration counter.
+        fullscreenState.userIntended = true;
+        fullscreenState.restorationAttempts = 0;
+        return;
+      }
+
+      // Fullscreen was lost. Decide: did our enforcement cause this, or did the user exit?
+      // Signal: enforcement was running at the moment fullscreen exited, or completed very
+      // recently (≤3 s) — Twitch reacts to our DOM clicks with a slight delay.
+      const msSinceEnforcement = Date.now() - enforcementState.lastRunAtMs;
+      const likelyCausedByUs = fullscreenState.userIntended
+        && (enforcementState.inProgress || msSinceEnforcement < 2000);
+
+      if (likelyCausedByUs && fullscreenState.restorationAttempts < 3) {
+        fullscreenState.restorationAttempts += 1;
+        debug('fullscreen restore: fullscreen lost during/after enforcement, scheduling restore', {
+          attempt: fullscreenState.restorationAttempts,
+          enforcementInProgress: enforcementState.inProgress,
+          msSinceEnforcement
+        });
+        // Give Twitch time to fully settle into cinema mode before re-entering fullscreen.
+        setTimeout(() => {
+          if (isBrowserInFullscreen()) {
+            return; // already back in fullscreen somehow
+          }
+          if (fullscreenState.restorationInProgress) {
+            return;
+          }
+          fullscreenState.restorationInProgress = true;
+          attemptRestoreTwitchFullscreen().catch((err) => {
+            debug('fullscreen restore: error', String(err));
+          }).finally(() => {
+            fullscreenState.restorationInProgress = false;
+          });
+        }, 800);
+      } else {
+        // User intentionally exited fullscreen — clear intent, apply quality.
+        fullscreenState.userIntended = false;
+        fullscreenState.restorationAttempts = 0;
+        scheduleEnsureDesiredQualityForCurrentMode('fullscreen-exit', { delayMs: 500 });
+      }
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
 
     window.addEventListener('pageshow', () => {
       debug('quality enforcement: pageshow event');
