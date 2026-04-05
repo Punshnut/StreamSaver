@@ -2227,14 +2227,15 @@
     const waitBeforeMs = Number.isFinite(options.waitBeforeMs) ? Math.max(0, Math.floor(options.waitBeforeMs)) : 0;
     const maxAttempts = Number.isFinite(options.maxAttempts) ? Math.max(1, Math.floor(options.maxAttempts)) : 3;
     const getMenuCount = () => findVisibleMenuRoots().length;
+
+    if (waitBeforeMs > 0) {
+      await wait(waitBeforeMs);
+    }
+
     const initialCount = getMenuCount();
 
     if (initialCount === 0) {
       return createResult(true, 'NO_MENUS_OPEN', 'No menus were open.');
-    }
-
-    if (waitBeforeMs > 0) {
-      await wait(waitBeforeMs);
     }
 
     debug('closeMenusIfNeeded: trying to close menus', {
@@ -2739,7 +2740,7 @@
     let closeAfterResult = await closeMenusIfNeeded({
       allowBodyClick: true,
       aggressiveBodyClicks: true,
-      waitBeforeMs: 180,
+      waitBeforeMs: 350,
       maxAttempts: 2
     });
     if (!closeAfterResult.ok) {
@@ -2747,7 +2748,7 @@
       const closeAfterRetryResult = await closeMenusIfNeeded({
         allowBodyClick: true,
         aggressiveBodyClicks: true,
-        waitBeforeMs: 260,
+        waitBeforeMs: 500,
         maxAttempts: 2
       });
       closeAfterResult = closeAfterRetryResult.ok
