@@ -6,7 +6,7 @@
 Twitch Quality Control That Actually Sticks
 
 ### Subheadline
-StreamSaver gives you instant Twitch quality switching, two persistent viewing modes, and automatic re-apply logic built for real live-stream browsing.
+StreamSaver is a lightweight extension that gives you instant Twitch quality switching, two persistent viewing modes, and automatic re-apply logic built for real live-stream browsing.
 
 ### Primary CTA
 Install StreamSaver

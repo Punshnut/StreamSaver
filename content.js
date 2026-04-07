@@ -2798,14 +2798,14 @@
 
   /** Detects current quality from visible Twitch menu state. */
   async function detectCurrentQualityState() {
-    const closeBeforeResult = await closeMenusIfNeeded({ allowBodyClick: true, maxAttempts: 2 });
+    const closeBeforeResult = await closeMenusIfNeeded({ allowBodyClick: true, aggressiveBodyClicks: true, maxAttempts: 2 });
     if (!closeBeforeResult.ok) {
       debug('detectCurrentQualityState: close-before step incomplete; continuing', closeBeforeResult);
     }
 
     const openResult = await openQualitySubmenu();
     if (!openResult.ok) {
-      const closeAfterResult = await closeMenusIfNeeded({ allowBodyClick: true, maxAttempts: 2 });
+      const closeAfterResult = await closeMenusIfNeeded({ allowBodyClick: true, aggressiveBodyClicks: true, maxAttempts: 2 });
       return createResult(false, 'CURRENT_QUALITY_OPEN_FAILED', 'Could not open quality menu to detect current selection.', {
         quality: 'unknown',
         openResult,
@@ -2816,7 +2816,7 @@
 
     const optionsResult = collectVisibleQualityOptions();
     if (!optionsResult.ok) {
-      const closeAfterResult = await closeMenusIfNeeded({ allowBodyClick: true, maxAttempts: 2 });
+      const closeAfterResult = await closeMenusIfNeeded({ allowBodyClick: true, aggressiveBodyClicks: true, maxAttempts: 2 });
       return createResult(false, 'CURRENT_QUALITY_OPTIONS_FAILED', optionsResult.message, {
         quality: 'unknown',
         openResult,
@@ -2835,7 +2835,7 @@
       reason: detectionResult.details?.reason
     });
 
-    const closeAfterResult = await closeMenusIfNeeded({ allowBodyClick: true, maxAttempts: 2 });
+    const closeAfterResult = await closeMenusIfNeeded({ allowBodyClick: true, aggressiveBodyClicks: true, maxAttempts: 2 });
     if (!closeAfterResult.ok) {
       debug('detectCurrentQualityState: close-after step incomplete', closeAfterResult);
     }
@@ -3024,6 +3024,11 @@
           debug('quality enforcement: skipped because current quality already matches target', {
             targetQuality: resolvedTarget.targetQuality
           });
+          // Safety net: detectCurrentQualityState opens the quality submenu and closes it,
+          // but the close can fail when the tab just became visible (e.g. after sleep/wake or
+          // tab switch) because escape key events may not be processed reliably at that point.
+          // Ensure the menu is closed before returning so the user never sees a stuck-open menu.
+          await closeMenusIfNeeded({ allowBodyClick: true, aggressiveBodyClicks: true, maxAttempts: 2 });
           return createResult(true, 'QUALITY_ALREADY_MATCHES_MODE', 'Current quality already matches active mode.', {
             triggerReason,
             activeMode: resolvedTarget.activeMode,
