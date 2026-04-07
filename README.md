@@ -63,6 +63,10 @@ All available resolutions are selectable, so you can shape the setup exactly how
 - Some quality levels may be unavailable per stream/transcoder conditions
 - The settings menu may briefly pop open while applying the selected resolution; this is expected behavior for now
 
+## Privacy
+
+StreamSaver only activates on Twitch pages. Its content script runs exclusively on `https://www.twitch.tv/*` — other websites cannot detect the extension is installed. No data is collected or transmitted; all settings are stored locally in your browser.
+
 ## Support
 
 [Ko-Fi](https://ko-fi.com/janfeuerbacher)

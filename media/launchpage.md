@@ -76,6 +76,7 @@ Built for Twitch UI Reality, Not Ideal Conditions
 - Settings persisted with `chrome.storage.local`
 - Automatic enforcement with debounce and cooldown protection
 - Helpful status feedback for unsupported tabs/pages
+- Zero footprint on non-Twitch sites — other websites cannot detect the extension is installed. No data collected or transmitted; all settings stored locally in your browser.
 
 ---
 
@@ -138,6 +139,9 @@ StreamSaver supports Chrome, Edge, Brave, Opera, Vivaldi, Arc, Zen, and Firefox.
 
 ### Is StreamSaver affiliated with Twitch?
 No. StreamSaver is an independent project and is not affiliated with Twitch.
+
+### Can other websites detect that StreamSaver is installed?
+No. StreamSaver's content script only activates on `www.twitch.tv`. Other websites have no way to detect the extension is installed. All settings are stored locally in your browser — nothing is sent to external servers.
 
 ---
 

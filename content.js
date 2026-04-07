@@ -1,5 +1,5 @@
 (() => {
-  const DEBUG = true;
+  const DEBUG = false;
   const DEBUG_PREFIX = '[StreamSaver][content]';
   const SETTINGS_MENU_DEBUG_MODE = false;
   const QUALITY_VALUES = ['160p', '360p', '480p', '720p', '1080p', '1440p', '2160p', 'Source'];
@@ -125,6 +125,11 @@
   function wait(ms) {
     const delay = Number.isFinite(ms) ? Math.max(0, ms) : 0;
     return new Promise((resolve) => setTimeout(resolve, delay));
+  }
+
+  /** Returns a small random offset in [-px, +px] to de-mechanize synthetic coordinates. */
+  function jitter(px = 8) {
+    return (Math.random() - 0.5) * px * 2;
   }
 
   /** Visibility guard used before reading/clicking Twitch UI elements. */
@@ -537,8 +542,8 @@
     }
 
     const hoverPoints = [
-      { x: rect.left + rect.width * 0.5, y: rect.top + rect.height * 0.5 },
-      { x: rect.left + rect.width * 0.85, y: rect.top + rect.height * 0.9 }
+      { x: rect.left + rect.width * 0.5 + jitter(), y: rect.top + rect.height * 0.5 + jitter() },
+      { x: rect.left + rect.width * 0.85 + jitter(), y: rect.top + rect.height * 0.9 + jitter() }
     ];
 
     for (const point of hoverPoints) {
@@ -2273,6 +2278,7 @@
           cancelable: true
         };
         target.dispatchEvent(new KeyboardEvent('keydown', eventOptions));
+        await wait(Math.floor(Math.random() * 30) + 20);
         target.dispatchEvent(new KeyboardEvent('keyup', eventOptions));
       }
       await wait(100);
@@ -2382,9 +2388,9 @@
         };
 
         const clickPoints = [
-          { x: playerRect.left + playerRect.width * 0.50, y: playerRect.top + playerRect.height * 0.60 },
-          { x: playerRect.left + playerRect.width * 0.20, y: playerRect.top + playerRect.height * 0.65 },
-          { x: playerRect.left + playerRect.width * 0.80, y: playerRect.top + playerRect.height * 0.65 }
+          { x: playerRect.left + playerRect.width * 0.50 + jitter(), y: playerRect.top + playerRect.height * 0.60 + jitter() },
+          { x: playerRect.left + playerRect.width * 0.20 + jitter(), y: playerRect.top + playerRect.height * 0.65 + jitter() },
+          { x: playerRect.left + playerRect.width * 0.80 + jitter(), y: playerRect.top + playerRect.height * 0.65 + jitter() }
         ];
 
         let clicked = false;
@@ -2414,7 +2420,9 @@
             view: window
           };
           clickTarget.dispatchEvent(new MouseEvent('mousedown', mouseOptions));
+          await wait(Math.floor(Math.random() * 40) + 30);
           clickTarget.dispatchEvent(new MouseEvent('mouseup', mouseOptions));
+          await wait(Math.floor(Math.random() * 20) + 10);
           clickTarget.dispatchEvent(new MouseEvent('click', mouseOptions));
           clicked = true;
           break;
