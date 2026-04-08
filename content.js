@@ -388,6 +388,32 @@
     return createResult(false, 'PLAYER_NOT_FOUND', 'No visible Twitch player root was found.');
   }
 
+  /** Injects a CSS rule that makes Twitch player menus visually transparent while the
+   *  extension interacts with them. Uses filter:opacity(0) rather than opacity:0 so that
+   *  isElementVisible() and getBoundingClientRect() continue to work normally for JS interaction. */
+  function showMenuHider() {
+    if (document.getElementById('streamsaver-menu-hider')) return;
+    const style = document.createElement('style');
+    style.id = 'streamsaver-menu-hider';
+    // Targets only actual menu/listbox overlay elements. Intentionally excludes [role="dialog"]
+    // and [data-a-target*="player-settings"] which are too broad and would catch the settings
+    // gear button itself, making it disappear during extension interaction.
+    style.textContent =
+      '[role="menu"],[role="listbox"],' +
+      '[data-a-target*="settings-menu" i],' +
+      '[data-a-target*="dropdown-menu" i],[data-test-selector*="menu" i],' +
+      '[class*="settings-menu" i]{filter:opacity(0)!important;}';
+    document.head.appendChild(style);
+  }
+
+  /** Removes the menu hider style injected by showMenuHider(). */
+  async function hideMenuHider() {
+    // Brief settle delay so Twitch's menu close animation completes before the hider is
+    // lifted — without this the menu can flicker into view during its exit transition.
+    await wait(180);
+    document.getElementById('streamsaver-menu-hider')?.remove();
+  }
+
   /** Collects visible menu-like overlay roots. */
   function findVisibleMenuRoots() {
     const selectors = [
@@ -2688,28 +2714,43 @@
       });
     }
 
-    const closeBeforeResult = await closeMenusIfNeeded({
-      allowBodyClick: false,
-      aggressiveBodyClicks: false,
-      waitBeforeMs: 0,
-      maxAttempts: 2
-    });
-    if (!closeBeforeResult.ok) {
-      debug('executeSetQualityAutomation: close-before step incomplete; continuing', closeBeforeResult);
-    }
-
-    if (SETTINGS_MENU_DEBUG_MODE) {
-      const qualitySubmenuResult = await openQualitySubmenu();
-      debug('executeSetQualityAutomation: settings-menu debug result', qualitySubmenuResult);
-      const closeAfterDebugResult = await closeMenusIfNeeded({
-        allowBodyClick: true,
-        aggressiveBodyClicks: true,
-        waitBeforeMs: 160,
+    showMenuHider();
+    try {
+      const closeBeforeResult = await closeMenusIfNeeded({
+        allowBodyClick: false,
+        aggressiveBodyClicks: false,
+        waitBeforeMs: 0,
         maxAttempts: 2
       });
+      if (!closeBeforeResult.ok) {
+        debug('executeSetQualityAutomation: close-before step incomplete; continuing', closeBeforeResult);
+      }
 
-      if (!qualitySubmenuResult.ok) {
-        return makeResponse(false, action, qualitySubmenuResult.message, {
+      if (SETTINGS_MENU_DEBUG_MODE) {
+        const qualitySubmenuResult = await openQualitySubmenu();
+        debug('executeSetQualityAutomation: settings-menu debug result', qualitySubmenuResult);
+        const closeAfterDebugResult = await closeMenusIfNeeded({
+          allowBodyClick: true,
+          aggressiveBodyClicks: true,
+          waitBeforeMs: 160,
+          maxAttempts: 2
+        });
+
+        if (!qualitySubmenuResult.ok) {
+          return makeResponse(false, action, qualitySubmenuResult.message, {
+            targetQuality: normalizedTarget,
+            settingsMenuDebugOnly: true,
+            resultCode: qualitySubmenuResult.code,
+            step: qualitySubmenuResult,
+            closeBefore: closeBeforeResult,
+            closeAfter: closeAfterDebugResult,
+            playerSelector: playerRootResult.details.selector,
+            pageSupport,
+            ...extraDetails
+          });
+        }
+
+        return makeResponse(true, action, 'Quality submenu debug check passed. Resolution switching is temporarily disabled.', {
           targetQuality: normalizedTarget,
           settingsMenuDebugOnly: true,
           resultCode: qualitySubmenuResult.code,
@@ -2722,59 +2763,61 @@
         });
       }
 
-      return makeResponse(true, action, 'Quality submenu debug check passed. Resolution switching is temporarily disabled.', {
-        targetQuality: normalizedTarget,
-        settingsMenuDebugOnly: true,
-        resultCode: qualitySubmenuResult.code,
-        step: qualitySubmenuResult,
-        closeBefore: closeBeforeResult,
-        closeAfter: closeAfterDebugResult,
-        playerSelector: playerRootResult.details.selector,
-        pageSupport,
-        ...extraDetails
-      });
-    }
+      const attemptResult = await attemptSetQuality(normalizedTarget);
+      const requestedQuality =
+        validateQuality(attemptResult?.details?.requestedQuality) || validateQuality(attemptResult?.details?.targetQuality) || normalizedTarget;
+      const appliedQuality =
+        validateQuality(attemptResult?.details?.appliedQuality) || validateQuality(attemptResult?.details?.targetQuality) || requestedQuality;
+      const resolutionAdjustment =
+        attemptResult?.details?.resolutionAdjustment && typeof attemptResult.details.resolutionAdjustment === 'object'
+          ? attemptResult.details.resolutionAdjustment
+          : null;
 
-    const attemptResult = await attemptSetQuality(normalizedTarget);
-    const requestedQuality =
-      validateQuality(attemptResult?.details?.requestedQuality) || validateQuality(attemptResult?.details?.targetQuality) || normalizedTarget;
-    const appliedQuality =
-      validateQuality(attemptResult?.details?.appliedQuality) || validateQuality(attemptResult?.details?.targetQuality) || requestedQuality;
-    const resolutionAdjustment =
-      attemptResult?.details?.resolutionAdjustment && typeof attemptResult.details.resolutionAdjustment === 'object'
-        ? attemptResult.details.resolutionAdjustment
-        : null;
-
-    let closeAfterResult = await closeMenusIfNeeded({
-      allowBodyClick: true,
-      aggressiveBodyClicks: true,
-      waitBeforeMs: 350,
-      maxAttempts: 2
-    });
-    if (!closeAfterResult.ok) {
-      debug('executeSetQualityAutomation: close-after first pass failed, retrying with extra settle delay', closeAfterResult);
-      const closeAfterRetryResult = await closeMenusIfNeeded({
+      let closeAfterResult = await closeMenusIfNeeded({
         allowBodyClick: true,
         aggressiveBodyClicks: true,
-        waitBeforeMs: 500,
+        waitBeforeMs: 350,
         maxAttempts: 2
       });
-      closeAfterResult = closeAfterRetryResult.ok
-        ? createResult(true, 'MENUS_CLOSED_AFTER_RETRY', 'Menus closed successfully after delayed retry.', {
-            firstPass: closeAfterResult,
-            retryPass: closeAfterRetryResult
-          })
-        : createResult(false, 'MENU_CLOSE_TIMEOUT_AFTER_RETRY', 'Menus remained open after immediate and delayed close attempts.', {
-            firstPass: closeAfterResult,
-            retryPass: closeAfterRetryResult
-          });
-    }
-    if (!closeAfterResult.ok) {
-      debug('executeSetQualityAutomation: close-after step incomplete', closeAfterResult);
-    }
+      if (!closeAfterResult.ok) {
+        debug('executeSetQualityAutomation: close-after first pass failed, retrying with extra settle delay', closeAfterResult);
+        const closeAfterRetryResult = await closeMenusIfNeeded({
+          allowBodyClick: true,
+          aggressiveBodyClicks: true,
+          waitBeforeMs: 500,
+          maxAttempts: 2
+        });
+        closeAfterResult = closeAfterRetryResult.ok
+          ? createResult(true, 'MENUS_CLOSED_AFTER_RETRY', 'Menus closed successfully after delayed retry.', {
+              firstPass: closeAfterResult,
+              retryPass: closeAfterRetryResult
+            })
+          : createResult(false, 'MENU_CLOSE_TIMEOUT_AFTER_RETRY', 'Menus remained open after immediate and delayed close attempts.', {
+              firstPass: closeAfterResult,
+              retryPass: closeAfterRetryResult
+            });
+      }
+      if (!closeAfterResult.ok) {
+        debug('executeSetQualityAutomation: close-after step incomplete', closeAfterResult);
+      }
 
-    if (!attemptResult.ok) {
-      return makeResponse(false, action, attemptResult.message, {
+      if (!attemptResult.ok) {
+        return makeResponse(false, action, attemptResult.message, {
+          requestedQuality,
+          targetQuality: appliedQuality,
+          appliedQuality,
+          resolutionAdjustment,
+          resultCode: attemptResult.code,
+          step: attemptResult,
+          closeBefore: closeBeforeResult,
+          closeAfter: closeAfterResult,
+          playerSelector: playerRootResult.details.selector,
+          pageSupport,
+          ...extraDetails
+        });
+      }
+
+      return makeResponse(true, action, attemptResult.message, {
         requestedQuality,
         targetQuality: appliedQuality,
         appliedQuality,
@@ -2787,73 +2830,66 @@
         pageSupport,
         ...extraDetails
       });
+    } finally {
+      await hideMenuHider();
     }
-
-    return makeResponse(true, action, attemptResult.message, {
-      requestedQuality,
-      targetQuality: appliedQuality,
-      appliedQuality,
-      resolutionAdjustment,
-      resultCode: attemptResult.code,
-      step: attemptResult,
-      closeBefore: closeBeforeResult,
-      closeAfter: closeAfterResult,
-      playerSelector: playerRootResult.details.selector,
-      pageSupport,
-      ...extraDetails
-    });
   }
 
   /** Detects current quality from visible Twitch menu state. */
   async function detectCurrentQualityState() {
-    const closeBeforeResult = await closeMenusIfNeeded({ allowBodyClick: true, aggressiveBodyClicks: true, maxAttempts: 2 });
-    if (!closeBeforeResult.ok) {
-      debug('detectCurrentQualityState: close-before step incomplete; continuing', closeBeforeResult);
-    }
+    showMenuHider();
+    try {
+      const closeBeforeResult = await closeMenusIfNeeded({ allowBodyClick: true, aggressiveBodyClicks: true, maxAttempts: 2 });
+      if (!closeBeforeResult.ok) {
+        debug('detectCurrentQualityState: close-before step incomplete; continuing', closeBeforeResult);
+      }
 
-    const openResult = await openQualitySubmenu();
-    if (!openResult.ok) {
+      const openResult = await openQualitySubmenu();
+      if (!openResult.ok) {
+        const closeAfterResult = await closeMenusIfNeeded({ allowBodyClick: true, aggressiveBodyClicks: true, maxAttempts: 2 });
+        return createResult(false, 'CURRENT_QUALITY_OPEN_FAILED', 'Could not open quality menu to detect current selection.', {
+          quality: 'unknown',
+          openResult,
+          closeBeforeResult,
+          closeAfterResult
+        });
+      }
+
+      const optionsResult = collectVisibleQualityOptions();
+      if (!optionsResult.ok) {
+        const closeAfterResult = await closeMenusIfNeeded({ allowBodyClick: true, aggressiveBodyClicks: true, maxAttempts: 2 });
+        return createResult(false, 'CURRENT_QUALITY_OPTIONS_FAILED', optionsResult.message, {
+          quality: 'unknown',
+          openResult,
+          optionsResult,
+          closeBeforeResult,
+          closeAfterResult
+        });
+      }
+
+      const detectionResult = detectCurrentSelectedQuality(optionsResult.details.options);
+      debug('detectCurrentQualityState: selection inference result', {
+        code: detectionResult.code,
+        message: detectionResult.message,
+        quality: detectionResult.details?.quality,
+        method: detectionResult.details?.method,
+        reason: detectionResult.details?.reason
+      });
+
       const closeAfterResult = await closeMenusIfNeeded({ allowBodyClick: true, aggressiveBodyClicks: true, maxAttempts: 2 });
-      return createResult(false, 'CURRENT_QUALITY_OPEN_FAILED', 'Could not open quality menu to detect current selection.', {
-        quality: 'unknown',
-        openResult,
+      if (!closeAfterResult.ok) {
+        debug('detectCurrentQualityState: close-after step incomplete', closeAfterResult);
+      }
+
+      detectionResult.details = {
+        ...(detectionResult.details || {}),
         closeBeforeResult,
         closeAfterResult
-      });
+      };
+      return detectionResult;
+    } finally {
+      await hideMenuHider();
     }
-
-    const optionsResult = collectVisibleQualityOptions();
-    if (!optionsResult.ok) {
-      const closeAfterResult = await closeMenusIfNeeded({ allowBodyClick: true, aggressiveBodyClicks: true, maxAttempts: 2 });
-      return createResult(false, 'CURRENT_QUALITY_OPTIONS_FAILED', optionsResult.message, {
-        quality: 'unknown',
-        openResult,
-        optionsResult,
-        closeBeforeResult,
-        closeAfterResult
-      });
-    }
-
-    const detectionResult = detectCurrentSelectedQuality(optionsResult.details.options);
-    debug('detectCurrentQualityState: selection inference result', {
-      code: detectionResult.code,
-      message: detectionResult.message,
-      quality: detectionResult.details?.quality,
-      method: detectionResult.details?.method,
-      reason: detectionResult.details?.reason
-    });
-
-    const closeAfterResult = await closeMenusIfNeeded({ allowBodyClick: true, aggressiveBodyClicks: true, maxAttempts: 2 });
-    if (!closeAfterResult.ok) {
-      debug('detectCurrentQualityState: close-after step incomplete', closeAfterResult);
-    }
-
-    detectionResult.details = {
-      ...(detectionResult.details || {}),
-      closeBeforeResult,
-      closeAfterResult
-    };
-    return detectionResult;
   }
 
   /** Handles action=setQuality using validated page state and robust UI automation. */
