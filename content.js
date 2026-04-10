@@ -388,29 +388,51 @@
     return createResult(false, 'PLAYER_NOT_FOUND', 'No visible Twitch player root was found.');
   }
 
+  // Ref-count for the menu hider. showMenuHider increments, hideMenuHider decrements.
+  // The style is only removed when the count reaches zero AND menus are confirmed closed,
+  // so back-to-back automation calls (detect → set) share one continuous hider lifetime.
+  let _menuHiderCount = 0;
+
   /** Injects a CSS rule that makes Twitch player menus visually transparent while the
-   *  extension interacts with them. Uses filter:opacity(0) rather than opacity:0 so that
-   *  isElementVisible() and getBoundingClientRect() continue to work normally for JS interaction. */
+   *  extension interacts with them.
+   *  - filter:opacity(0)  — hides menus visually without affecting isElementVisible() or
+   *                         getBoundingClientRect(), so all JS-driven interaction still works.
+   *  - pointer-events:none — lets document.elementFromPoint() see through the invisible menu
+   *                          to the player below, which is required for closeMenusIfNeeded's
+   *                          player-area click fallback to find a valid click target. */
   function showMenuHider() {
+    _menuHiderCount++;
     if (document.getElementById('streamsaver-menu-hider')) return;
     const style = document.createElement('style');
     style.id = 'streamsaver-menu-hider';
-    // Targets only actual menu/listbox overlay elements. Intentionally excludes [role="dialog"]
-    // and [data-a-target*="player-settings"] which are too broad and would catch the settings
-    // gear button itself, making it disappear during extension interaction.
     style.textContent =
       '[role="menu"],[role="listbox"],' +
       '[data-a-target*="settings-menu" i],' +
       '[data-a-target*="dropdown-menu" i],[data-test-selector*="menu" i],' +
-      '[class*="settings-menu" i]{filter:opacity(0)!important;}';
+      '[class*="settings-menu" i]{filter:opacity(0)!important;pointer-events:none!important;}';
     document.head.appendChild(style);
   }
 
-  /** Removes the menu hider style injected by showMenuHider(). */
+  /** Decrements the hider ref-count and, once it reaches zero, polls until menus are
+   *  confirmed gone before removing the style. This ensures a lingering or stuck menu is
+   *  never revealed to the user when the hider lifts. Hard timeout: 800 ms. */
   async function hideMenuHider() {
-    // Brief settle delay so Twitch's menu close animation completes before the hider is
-    // lifted — without this the menu can flicker into view during its exit transition.
-    await wait(180);
+    _menuHiderCount = Math.max(0, _menuHiderCount - 1);
+    if (_menuHiderCount > 0) return;
+    // If menus are still open, make one extra close attempt. pointer-events:none is still
+    // active here, so document.elementFromPoint() sees through the invisible menu to the
+    // player — this is the path that was failing at channel-join time.
+    if (findVisibleMenuRoots().length > 0) {
+      await closeMenusIfNeeded({ allowBodyClick: true, aggressiveBodyClicks: true, maxAttempts: 2 });
+    }
+    // Poll briefly to confirm menus are gone before lifting the hider.
+    const deadline = Date.now() + 400;
+    while (Date.now() < deadline) {
+      if (_menuHiderCount > 0) return;
+      if (findVisibleMenuRoots().length === 0) break;
+      await wait(60);
+    }
+    if (_menuHiderCount > 0) return;
     document.getElementById('streamsaver-menu-hider')?.remove();
   }
 
@@ -2108,12 +2130,14 @@
     const expandedCandidate = candidates.find((candidate) => {
       return String(candidate.element.getAttribute('aria-expanded') || '').toLowerCase() === 'true';
     });
-    const target = expandedCandidate || candidates[0];
-    const clickResult = clickElementSafely(target.element, { prepare: false });
+    if (!expandedCandidate) {
+      return createResult(false, 'NO_EXPANDED_MENU', 'Settings button found but aria-expanded is not true; skipping click to avoid re-opening menu.');
+    }
+    const clickResult = clickElementSafely(expandedCandidate.element, { prepare: false });
     if (!clickResult.ok) {
       return createResult(false, clickResult.code, 'Failed to click settings toggle for close attempt.', {
-        ariaLabel: target.ariaLabel,
-        text: target.text,
+        ariaLabel: expandedCandidate.ariaLabel,
+        text: expandedCandidate.text,
         clickResult
       });
     }
