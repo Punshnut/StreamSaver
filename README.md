@@ -42,7 +42,7 @@ Firefox requires a signed extension file (`.xpi`). Download the latest `streamsa
 
 - One-click quality switching from the popup
 - Two persistent modes: `High Quality` and `Travel / Data Saver`
-- Auto re-apply of your selected mode on Twitch live pages
+- Auto re-apply of your selected mode on Twitch live pages without interrupting your viewing
 - Settings are saved in `chrome.storage.local`
 
 ## Real-World Use Case: Two-Speed Streaming
@@ -61,7 +61,6 @@ All available resolutions are selectable, so you can shape the setup exactly how
 - Twitch only: `https://www.twitch.tv/*`
 - Twitch UI changes can require updates
 - Some quality levels may be unavailable per stream/transcoder conditions
-- The settings menu may briefly pop open while applying the selected resolution; this is expected behavior for now
 
 ## Privacy
 

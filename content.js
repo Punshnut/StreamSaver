@@ -39,6 +39,7 @@
   const ENFORCEMENT_COOLDOWN_MS = 6000;
   const ENFORCEMENT_DEBOUNCE_MS = 600;
   const ENFORCEMENT_PLAYER_READY_TIMEOUT_MS = 6000;
+  const QUALITY_TRUST_TTL_MS = 25_000; // skip detect+set when quality was recently confirmed
   let activeSetQualityRun = null;
   const enforcementState = {
     inProgress: false,
@@ -46,6 +47,7 @@
     lastRunAtMs: 0,
     lastRunUrl: '',
     lastResolvedTargetQuality: '',
+    lastConfirmedQualityAtMs: 0, // when quality was last successfully confirmed (detect or set)
     urlWatchTimerId: null
   };
   const fullscreenState = {
@@ -402,6 +404,7 @@
    *                          player-area click fallback to find a valid click target. */
   function showMenuHider() {
     _menuHiderCount++;
+    debug('menuHider: show', { count: _menuHiderCount, t: Date.now() });
     if (document.getElementById('streamsaver-menu-hider')) return;
     const style = document.createElement('style');
     style.id = 'streamsaver-menu-hider';
@@ -433,6 +436,7 @@
       await wait(60);
     }
     if (_menuHiderCount > 0) return;
+    debug('menuHider: hide (lock lifted)', { t: Date.now() });
     document.getElementById('streamsaver-menu-hider')?.remove();
   }
 
@@ -1881,7 +1885,7 @@
     let effectiveTargetQuality = normalizedTarget;
     let resolutionAdjustment = null;
 
-    for (let attempt = 1; attempt <= 8; attempt += 1) {
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
       debug('attemptSetQuality: collecting visible quality options', { attempt });
       const collected = collectVisibleQualityOptions();
       if (collected.ok) {
@@ -3073,6 +3077,25 @@
         return createResult(false, 'FULLSCREEN_ACTIVE', 'Quality enforcement aborted — entered fullscreen during setup.');
       }
 
+      // Skip detect+set entirely if we recently confirmed this quality on the same URL.
+      // Force triggers (storage change, SPA nav, page show) always bypass this.
+      const trustAge = Date.now() - enforcementState.lastConfirmedQualityAtMs;
+      const canSkipDetection = (
+        !force &&
+        enforcementState.lastResolvedTargetQuality === resolvedTarget.targetQuality &&
+        enforcementState.lastRunUrl === location.href &&
+        trustAge < QUALITY_TRUST_TTL_MS
+      );
+      if (canSkipDetection) {
+        debug('quality enforcement: skipping detect+set — trusted quality state matches target', {
+          triggerReason, trustAgeMs: trustAge, target: resolvedTarget.targetQuality
+        });
+        enforcementState.lastRunAtMs = Date.now();
+        return createResult(true, 'QUALITY_TRUSTED', 'Quality recently confirmed; skipping menu detection.', {
+          triggerReason, targetQuality: resolvedTarget.targetQuality, trustAgeMs: trustAge
+        });
+      }
+
       const currentQualityResult = await detectCurrentQualityState();
 
       // Re-check: detectCurrentQualityState() opens/closes menus and is async;
@@ -3092,6 +3115,8 @@
           debug('quality enforcement: skipped because current quality already matches target', {
             targetQuality: resolvedTarget.targetQuality
           });
+          enforcementState.lastResolvedTargetQuality = resolvedTarget.targetQuality;
+          enforcementState.lastConfirmedQualityAtMs = Date.now();
           // Safety net: detectCurrentQualityState opens the quality submenu and closes it,
           // but the close can fail when the tab just became visible (e.g. after sleep/wake or
           // tab switch) because escape key events may not be processed reliably at that point.
@@ -3134,6 +3159,7 @@
           resultCode: automationResponse.details?.resultCode
         });
         enforcementState.lastResolvedTargetQuality = resolvedTarget.targetQuality;
+        enforcementState.lastConfirmedQualityAtMs = Date.now();
       } else {
         debug('quality enforcement: automation failed', {
           message: automationResponse.message,
@@ -3295,7 +3321,7 @@
     window.addEventListener('focus', () => {
       debug('quality enforcement: window focused');
       scheduleEnsureDesiredQualityForCurrentMode('window-focus', {
-        delayMs: 500
+        delayMs: 300
       });
     });
 
