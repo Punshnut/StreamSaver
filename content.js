@@ -194,6 +194,10 @@
       }
     }
 
+    if (element.tagName === 'A' && element.hasAttribute('href')) {
+      return createResult(false, 'NAVIGATION_LINK', 'Refusing to click anchor with href — would cause page navigation.');
+    }
+
     try {
       element.click();
       return createResult(true, 'CLICKED', 'Element clicked successfully.');
@@ -1632,7 +1636,9 @@
     const optionsByKey = new Map();
 
     for (const menuRoot of menuRoots) {
-      const entries = Array.from(menuRoot.querySelectorAll(selector)).filter((entry) => isElementVisible(entry));
+      const entries = Array.from(menuRoot.querySelectorAll(selector))
+        .filter((entry) => isElementVisible(entry))
+        .filter((entry) => !entry.matches('a[href]'));
       for (const entry of entries) {
         const label = getVisibleText(entry);
         if (!label) {
