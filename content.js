@@ -2401,10 +2401,12 @@
 
       // Last resort: click inside player area to avoid navigation.
       if (allowBodyClick && !playerClickAttempted && (aggressiveBodyClicks || attempt >= 2)) {
+        // Mark early to prevent re-entry on subsequent iterations regardless of which path runs.
+        playerClickAttempted = true;
+
         // In fullscreen, body clicks on the player trigger Twitch's exit-fullscreen handler.
         // Hover to reveal controls first, then use the settings gear toggle as a safe alternative.
         if (isBrowserInFullscreen()) {
-          playerClickAttempted = true;
           const fsPlayerResult = getPlayerRoot();
           if (fsPlayerResult.ok && fsPlayerResult.details?.element) {
             triggerPlayerHover(fsPlayerResult.details.element);
@@ -2424,7 +2426,28 @@
           await wait(80);
           continue;
         }
-        playerClickAttempted = true;
+
+        // Non-fullscreen: hover to reveal controls and retry settings toggle before
+        // resorting to a player-area click. Player-area clicks can accidentally toggle
+        // VOD play/pause because the video overlay is not a button/link and passes the
+        // safety check below.
+        const hoverPlayerResult = getPlayerRoot();
+        if (hoverPlayerResult.ok && hoverPlayerResult.details?.element) {
+          triggerPlayerHover(hoverPlayerResult.details.element);
+          await wait(200);
+        }
+        const hoverRetryResult = tryCloseViaSettingsToggle();
+        if (hoverRetryResult.ok) {
+          await wait(100);
+          if (getMenuCount() === 0) {
+            debug('closeMenusIfNeeded: closed via hover + settings toggle retry', { attempt });
+            return createResult(true, 'MENUS_CLOSED', 'Menus closed successfully.', {
+              attempts: attempt,
+              closedBy: 'hover-settings-toggle-retry'
+            });
+          }
+        }
+
         const playerRootResult = getPlayerRoot();
         if (!playerRootResult.ok || !(playerRootResult.details?.element instanceof Element)) {
           await wait(80);
@@ -2469,7 +2492,7 @@
           if (!playerRoot.contains(clickTarget)) {
             continue;
           }
-          if (clickTarget.closest('a[href], [role="link"], button, [role="button"], input, select, textarea')) {
+          if (clickTarget.closest('a[href], [role="link"], button, [role="button"], input, select, textarea, video')) {
             continue;
           }
           const mouseOptions = {
@@ -3013,6 +3036,11 @@
     if (isBrowserInFullscreen()) {
       debug('quality enforcement: skipped because document is in fullscreen mode', { triggerReason });
       return createResult(false, 'FULLSCREEN_ACTIVE', 'Quality enforcement skipped while in fullscreen mode.');
+    }
+
+    if (document.visibilityState !== 'visible') {
+      debug('quality enforcement: skipped because tab is not visible', { triggerReason });
+      return createResult(false, 'TAB_NOT_VISIBLE', 'Quality enforcement skipped — tab not visible.');
     }
 
     enforcementState.inProgress = true;

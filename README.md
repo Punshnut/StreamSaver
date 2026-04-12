@@ -36,7 +36,7 @@ Important: do not select the ZIP file itself. You must extract it first, then im
 
 ## Install (Firefox)
 
-Firefox requires a signed extension file (`.xpi`). Download the latest `streamsaver-firefox-vX.X.xpi` from the releases page and open it — Firefox will prompt you to install it directly.
+Firefox requires a signed extension file (`.xpi`). Download the latest `streamsaver-firefox-vX.X.xpi` from the releases page and open it - Firefox will prompt you to install it directly.
 
 ## What It Does
 
@@ -64,7 +64,7 @@ All available resolutions are selectable, so you can shape the setup exactly how
 
 ## Privacy
 
-StreamSaver only activates on Twitch pages. Its content script runs exclusively on `https://www.twitch.tv/*` — other websites cannot detect the extension is installed. No data is collected or transmitted; all settings are stored locally in your browser.
+StreamSaver only activates on Twitch pages. Its content script runs exclusively on `https://www.twitch.tv/*` - other websites cannot detect the extension is installed. No data is collected or transmitted; all settings are stored locally in your browser.
 
 ## Support
 
