@@ -3038,9 +3038,9 @@
       return createResult(false, 'FULLSCREEN_ACTIVE', 'Quality enforcement skipped while in fullscreen mode.');
     }
 
-    if (document.visibilityState !== 'visible') {
-      debug('quality enforcement: skipped because tab is not visible', { triggerReason });
-      return createResult(false, 'TAB_NOT_VISIBLE', 'Quality enforcement skipped — tab not visible.');
+    if (document.visibilityState !== 'visible' || !document.hasFocus()) {
+      debug('quality enforcement: skipped because tab is not visible or window is not focused', { triggerReason });
+      return createResult(false, 'TAB_NOT_FOCUSED', 'Quality enforcement skipped — tab not visible or window not focused.');
     }
 
     enforcementState.inProgress = true;
@@ -3111,6 +3111,14 @@
         return createResult(false, 'FULLSCREEN_ACTIVE', 'Quality enforcement aborted — entered fullscreen during setup.');
       }
 
+      // Re-check: user may have switched tabs or windows during the async setup phase above.
+      // Menu interactions (open/close) are unreliable without focus — skip to avoid
+      // accidentally toggling VOD play/pause via the outside-click fallback.
+      if (document.visibilityState !== 'visible' || !document.hasFocus()) {
+        debug('quality enforcement: aborted before DOM manipulation — tab lost focus during setup', { triggerReason });
+        return createResult(false, 'TAB_NOT_FOCUSED', 'Quality enforcement aborted — tab lost focus during setup.');
+      }
+
       // Skip detect+set entirely if we recently confirmed this quality on the same URL.
       // Force triggers (storage change, SPA nav, page show) always bypass this.
       const trustAge = Date.now() - enforcementState.lastConfirmedQualityAtMs;
@@ -3137,6 +3145,12 @@
       if (isBrowserInFullscreen()) {
         debug('quality enforcement: aborted after quality detection — entered fullscreen during detection', { triggerReason });
         return createResult(false, 'FULLSCREEN_ACTIVE', 'Quality enforcement aborted — entered fullscreen during quality detection.');
+      }
+
+      // Re-check: tab may have lost focus while menus were open during detection.
+      if (document.visibilityState !== 'visible' || !document.hasFocus()) {
+        debug('quality enforcement: aborted after quality detection — tab lost focus during detection', { triggerReason });
+        return createResult(false, 'TAB_NOT_FOCUSED', 'Quality enforcement aborted — tab lost focus during detection.');
       }
 
       if (currentQualityResult.ok) {
@@ -3323,14 +3337,18 @@
       });
     });
 
-    let previousUrl = location.href;
+    // Compare only origin+pathname so query-param-only changes (e.g. Twitch VOD ?t= timestamp
+    // updates that fire every ~10 s during playback) are not treated as SPA navigations.
+    const getUrlKey = () => location.origin + location.pathname;
+    let previousUrl = getUrlKey();
     enforcementState.urlWatchTimerId = setInterval(() => {
-      if (location.href === previousUrl) {
+      const currentUrl = getUrlKey();
+      if (currentUrl === previousUrl) {
         return;
       }
 
       const fromUrl = previousUrl;
-      previousUrl = location.href;
+      previousUrl = currentUrl;
       debug('quality enforcement: twitch SPA navigation detected', {
         fromUrl,
         toUrl: previousUrl
