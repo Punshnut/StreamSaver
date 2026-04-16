@@ -2314,6 +2314,7 @@
     let backStepAttempted = false;
     let closeEntryAttempted = false;
     let settingsToggleAttempted = false;
+    let hoverRetryAttempted = false;
     let playerClickAttempted = false;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -2399,6 +2400,29 @@
         }
       }
 
+      // Hover to reveal controls (settings button may not be visible while in a quality submenu)
+      // then retry the settings toggle. Keeps this attempt independent of allowBodyClick so it
+      // always runs before the outside-click fallback — which can accidentally toggle VOD play/pause.
+      if (aggressiveBodyClicks && !hoverRetryAttempted) {
+        hoverRetryAttempted = true;
+        const hoverPlayerResult = getPlayerRoot();
+        if (hoverPlayerResult.ok && hoverPlayerResult.details?.element) {
+          triggerPlayerHover(hoverPlayerResult.details.element);
+          await wait(200);
+        }
+        const hoverRetryResult = tryCloseViaSettingsToggle();
+        if (hoverRetryResult.ok) {
+          await wait(100);
+          if (getMenuCount() === 0) {
+            debug('closeMenusIfNeeded: closed via hover + settings toggle retry', { attempt });
+            return createResult(true, 'MENUS_CLOSED', 'Menus closed successfully.', {
+              attempts: attempt,
+              closedBy: 'hover-settings-toggle-retry'
+            });
+          }
+        }
+      }
+
       // Last resort: click inside player area to avoid navigation.
       if (allowBodyClick && !playerClickAttempted && (aggressiveBodyClicks || attempt >= 2)) {
         // Mark early to prevent re-entry on subsequent iterations regardless of which path runs.
@@ -2425,27 +2449,6 @@
           }
           await wait(80);
           continue;
-        }
-
-        // Non-fullscreen: hover to reveal controls and retry settings toggle before
-        // resorting to a player-area click. Player-area clicks can accidentally toggle
-        // VOD play/pause because the video overlay is not a button/link and passes the
-        // safety check below.
-        const hoverPlayerResult = getPlayerRoot();
-        if (hoverPlayerResult.ok && hoverPlayerResult.details?.element) {
-          triggerPlayerHover(hoverPlayerResult.details.element);
-          await wait(200);
-        }
-        const hoverRetryResult = tryCloseViaSettingsToggle();
-        if (hoverRetryResult.ok) {
-          await wait(100);
-          if (getMenuCount() === 0) {
-            debug('closeMenusIfNeeded: closed via hover + settings toggle retry', { attempt });
-            return createResult(true, 'MENUS_CLOSED', 'Menus closed successfully.', {
-              attempts: attempt,
-              closedBy: 'hover-settings-toggle-retry'
-            });
-          }
         }
 
         const playerRootResult = getPlayerRoot();
@@ -2896,14 +2899,14 @@
   async function detectCurrentQualityState() {
     showMenuHider();
     try {
-      const closeBeforeResult = await closeMenusIfNeeded({ allowBodyClick: true, aggressiveBodyClicks: true, maxAttempts: 2 });
+      const closeBeforeResult = await closeMenusIfNeeded({ allowBodyClick: false, aggressiveBodyClicks: true, maxAttempts: 2 });
       if (!closeBeforeResult.ok) {
         debug('detectCurrentQualityState: close-before step incomplete; continuing', closeBeforeResult);
       }
 
       const openResult = await openQualitySubmenu();
       if (!openResult.ok) {
-        const closeAfterResult = await closeMenusIfNeeded({ allowBodyClick: true, aggressiveBodyClicks: true, maxAttempts: 2 });
+        const closeAfterResult = await closeMenusIfNeeded({ allowBodyClick: false, aggressiveBodyClicks: true, maxAttempts: 2 });
         return createResult(false, 'CURRENT_QUALITY_OPEN_FAILED', 'Could not open quality menu to detect current selection.', {
           quality: 'unknown',
           openResult,
@@ -2914,7 +2917,7 @@
 
       const optionsResult = collectVisibleQualityOptions();
       if (!optionsResult.ok) {
-        const closeAfterResult = await closeMenusIfNeeded({ allowBodyClick: true, aggressiveBodyClicks: true, maxAttempts: 2 });
+        const closeAfterResult = await closeMenusIfNeeded({ allowBodyClick: false, aggressiveBodyClicks: true, maxAttempts: 2 });
         return createResult(false, 'CURRENT_QUALITY_OPTIONS_FAILED', optionsResult.message, {
           quality: 'unknown',
           openResult,
@@ -2933,7 +2936,7 @@
         reason: detectionResult.details?.reason
       });
 
-      const closeAfterResult = await closeMenusIfNeeded({ allowBodyClick: true, aggressiveBodyClicks: true, maxAttempts: 2 });
+      const closeAfterResult = await closeMenusIfNeeded({ allowBodyClick: false, aggressiveBodyClicks: true, maxAttempts: 2 });
       if (!closeAfterResult.ok) {
         debug('detectCurrentQualityState: close-after step incomplete', closeAfterResult);
       }
@@ -3169,7 +3172,7 @@
           // but the close can fail when the tab just became visible (e.g. after sleep/wake or
           // tab switch) because escape key events may not be processed reliably at that point.
           // Ensure the menu is closed before returning so the user never sees a stuck-open menu.
-          await closeMenusIfNeeded({ allowBodyClick: true, aggressiveBodyClicks: true, maxAttempts: 2 });
+          await closeMenusIfNeeded({ allowBodyClick: false, aggressiveBodyClicks: true, maxAttempts: 2 });
           return createResult(true, 'QUALITY_ALREADY_MATCHES_MODE', 'Current quality already matches active mode.', {
             triggerReason,
             activeMode: resolvedTarget.activeMode,
