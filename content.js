@@ -155,6 +155,18 @@
     return rect.width > 0 && rect.height > 0;
   }
 
+  /** Lighter visibility check for entries already inside a validated menu root.
+   *  Uses offsetWidth/offsetHeight instead of getBoundingClientRect to avoid
+   *  false-negatives in Firefox when a parent has filter:opacity(0) applied
+   *  (the menu hider), which can cause child rects to be misreported as 0×0. */
+  function isMenuEntryUsable(element) {
+    if (!(element instanceof Element) || !element.isConnected) return false;
+    if (element.hasAttribute('hidden') || element.getAttribute('aria-hidden') === 'true') return false;
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return false;
+    return element.offsetWidth > 0 || element.offsetHeight > 0;
+  }
+
   /** Returns readable text with ARIA/title fallbacks for menu matching. */
   function getVisibleText(element) {
     if (!(element instanceof Element) || !isElementVisible(element)) {
@@ -1372,6 +1384,11 @@
       });
     }
 
+    // Small stability window: Firefox renders quality rows slower than Chrome.
+    // Waiting briefly after the first options appear gives remaining rows time to render
+    // before the caller begins matching, reducing reliance on the pre-fallback retry.
+    await wait(150);
+
     const optionsResult = optionsWaitResult.details.value;
     debug('openQualitySubmenu: quality options visible', { count: optionsResult.details.options.length });
 
@@ -1637,7 +1654,7 @@
 
     for (const menuRoot of menuRoots) {
       const entries = Array.from(menuRoot.querySelectorAll(selector))
-        .filter((entry) => isElementVisible(entry))
+        .filter((entry) => isMenuEntryUsable(entry))
         .filter((entry) => !entry.matches('a[href]'));
       for (const entry of entries) {
         const label = getVisibleText(entry);
@@ -1929,6 +1946,23 @@
         openResult,
         optionsResult
       });
+    }
+
+    if ((!matchResult || !matchResult.ok) && optionsResult.ok) {
+      // Pre-fallback stabilization: give Firefox extra time to render all quality rows
+      // before concluding the target is out of range. On Chrome this path is rarely hit,
+      // so the added latency is only paid on the slow/incomplete-render path.
+      await wait(600);
+      const lateCollected = collectVisibleQualityOptions();
+      if (lateCollected.ok) {
+        optionsResult = lateCollected;
+        const lateMatch = findBestMatchingQualityOption(effectiveTargetQuality, lateCollected.details.options, {
+          allowSourceAliasForTargets
+        });
+        if (lateMatch.ok) {
+          matchResult = lateMatch;
+        }
+      }
     }
 
     if ((!matchResult || !matchResult.ok) && optionsResult.ok) {
