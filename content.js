@@ -164,7 +164,7 @@
     if (element.hasAttribute('hidden') || element.getAttribute('aria-hidden') === 'true') return false;
     const style = window.getComputedStyle(element);
     if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return false;
-    return element.offsetWidth > 0 || element.offsetHeight > 0;
+    return element.offsetWidth > 0 && element.offsetHeight > 0;
   }
 
   /** Returns readable text with ARIA/title fallbacks for menu matching. */
@@ -180,12 +180,23 @@
     return rawText.replace(/\s+/g, ' ').trim();
   }
 
+  /** Like getVisibleText but skips the isElementVisible gate.
+   *  For entries already vetted by isMenuEntryUsable() — they are layout-present
+   *  but may appear invisible to getBoundingClientRect due to the menu hider CSS. */
+  function getMenuEntryText(element) {
+    if (!(element instanceof Element)) return '';
+    const ariaLabel = element.getAttribute('aria-label');
+    const title = element.getAttribute('title');
+    return (ariaLabel || element.innerText || title || element.textContent || '')
+      .replace(/\s+/g, ' ').trim();
+  }
+
   /** Performs a defensive click with pre-checks and safe focus/scroll attempts. */
   function clickElementSafely(element, options = {}) {
     if (!(element instanceof HTMLElement)) {
       return createResult(false, 'INVALID_ELEMENT', 'Click target is not an HTML element.');
     }
-    if (!isElementVisible(element)) {
+    if (!options.skipVisibilityCheck && !isElementVisible(element)) {
       return createResult(false, 'ELEMENT_HIDDEN', 'Click target is not visible.');
     }
     if (element.matches('[disabled], [aria-disabled="true"]')) {
@@ -1657,7 +1668,7 @@
         .filter((entry) => isMenuEntryUsable(entry))
         .filter((entry) => !entry.matches('a[href]'));
       for (const entry of entries) {
-        const label = getVisibleText(entry);
+        const label = getMenuEntryText(entry);
         if (!label) {
           continue;
         }
@@ -2037,7 +2048,7 @@
       label: targetOption.label
     });
 
-    const clickResult = clickElementSafely(targetOption.element);
+    const clickResult = clickElementSafely(targetOption.element, { skipVisibilityCheck: true });
     if (!clickResult.ok) {
       return createResult(false, clickResult.code, `Failed to click quality option: ${targetOption.label}.`, {
         targetOption,
