@@ -152,7 +152,11 @@
     }
 
     const rect = element.getBoundingClientRect();
-    return rect.width > 0 && rect.height > 0;
+    if (rect.width > 0 && rect.height > 0) return true;
+    // Firefox: filter:opacity() applied to self or an ancestor can cause getBoundingClientRect
+    // to return a 0×0 rect even for layout-present elements. Fall back to offsetWidth/Height
+    // which are unaffected by CSS filter and reflect actual layout dimensions.
+    return element.offsetWidth > 0 && element.offsetHeight > 0;
   }
 
   /** Lighter visibility check for entries already inside a validated menu root.
@@ -506,15 +510,16 @@
     const raw = [];
 
     for (const element of Array.from(document.querySelectorAll(selector))) {
-      if (!isElementVisible(element)) {
+      if (!isMenuEntryUsable(element)) {
         continue;
       }
 
-      const rect = element.getBoundingClientRect();
-      if (rect.width < 180 || rect.height < 120) {
+      const ow = element.offsetWidth;
+      const oh = element.offsetHeight;
+      if (ow < 180 || oh < 120) {
         continue;
       }
-      if (rect.width > window.innerWidth * 0.96 || rect.height > window.innerHeight * 0.96) {
+      if (ow > window.innerWidth * 0.96 || oh > window.innerHeight * 0.96) {
         continue;
       }
 
@@ -540,11 +545,9 @@
     }
 
     // Keep smallest matching containers to avoid huge wrapper nodes.
-    raw.sort((a, b) => {
-      const rectA = a.getBoundingClientRect();
-      const rectB = b.getBoundingClientRect();
-      return rectA.width * rectA.height - rectB.width * rectB.height;
-    });
+    // Use offsetWidth/offsetHeight instead of getBoundingClientRect so this works
+    // even when filter:opacity(0) from the menu hider causes BCR to return 0×0.
+    raw.sort((a, b) => (a.offsetWidth * a.offsetHeight) - (b.offsetWidth * b.offsetHeight));
 
     const kept = [];
     for (const element of raw) {
@@ -577,11 +580,13 @@
 
     const playerRect = playerRoot.getBoundingClientRect();
     for (const root of roots) {
-      if (!isElementVisible(root)) {
+      if (!isMenuEntryUsable(root)) {
         continue;
       }
       const rect = root.getBoundingClientRect();
-      if (!isRectNear(playerRect, rect, 120)) {
+      // Firefox: filter:opacity(0) causes getBoundingClientRect to return 0×0 for menu roots.
+      // When that happens, skip the proximity check and rely on text content alone.
+      if (rect.width > 0 && rect.height > 0 && !isRectNear(playerRect, rect, 120)) {
         continue;
       }
 
@@ -791,10 +796,10 @@
     const entries = [];
 
     for (const entry of Array.from(menuRoot.querySelectorAll(selector))) {
-      if (!isElementVisible(entry)) {
+      if (!isMenuEntryUsable(entry)) {
         continue;
       }
-      const text = getVisibleText(entry);
+      const text = getMenuEntryText(entry);
       if (!text) {
         continue;
       }
@@ -852,7 +857,11 @@
 
     const playerRect = playerRoot.getBoundingClientRect();
     const menuRect = menuRoot.getBoundingClientRect();
-    const nearPlayer = isRectNear(playerRect, menuRect, 48);
+    // Firefox: filter:opacity(0) from the menu hider causes getBoundingClientRect to return 0×0
+    // for layout-present elements. When that happens, skip the proximity check and fall back
+    // to semantic content matching only.
+    const menuRectFiltered = menuRect.width === 0 && menuRect.height === 0 && menuRoot.offsetWidth > 0;
+    const nearPlayer = menuRectFiltered ? false : isRectNear(playerRect, menuRect, 48);
     const entryTexts = getVisibleMenuEntryTexts(menuRoot);
     const loweredEntries = entryTexts.map((text) => text.toLowerCase());
     const rootTextLower = String(menuRoot.innerText || menuRoot.textContent || '')
@@ -874,14 +883,19 @@
     if (hasAdvanced) matchedGroups.push('advanced');
 
     const strongSemanticMatch = matchedGroups.length >= 2 || (matchedGroups.includes('quality') && hasClose);
-    const accepted = entryTexts.length > 0 && matchedGroups.length > 0 && (nearPlayer || strongSemanticMatch);
+    // When Firefox returns a zero rect due to filter:opacity (menuRectFiltered), relax acceptance
+    // to quality-only since we cannot use geometry to confirm proximity.
+    const accepted = entryTexts.length > 0 && matchedGroups.length > 0 &&
+                     (nearPlayer || strongSemanticMatch || (menuRectFiltered && matchedGroups.includes('quality')));
     let reason = 'Accepted: menu matches player-settings entries and location.';
     if (entryTexts.length === 0) {
       reason = 'Rejected: menu has no visible entries.';
     } else if (matchedGroups.length === 0) {
       reason = 'Rejected: menu entries do not contain quality/subtitles/advanced labels.';
-    } else if (!nearPlayer && !strongSemanticMatch) {
+    } else if (!nearPlayer && !strongSemanticMatch && !(menuRectFiltered && matchedGroups.includes('quality'))) {
       reason = 'Rejected: menu is not near player and semantic match is too weak.';
+    } else if (menuRectFiltered && !nearPlayer && !strongSemanticMatch) {
+      reason = 'Accepted: quality match with zero rect (Firefox filter:opacity fallback).';
     } else if (!nearPlayer && strongSemanticMatch) {
       reason = 'Accepted: strong semantic match despite imperfect geometry.';
     }
@@ -1263,9 +1277,9 @@
     const candidates = [];
 
     for (const menuRoot of menuRoots) {
-      const entries = Array.from(menuRoot.querySelectorAll(selector)).filter((entry) => isElementVisible(entry));
+      const entries = Array.from(menuRoot.querySelectorAll(selector)).filter((entry) => isMenuEntryUsable(entry));
       for (const entry of entries) {
-        const entryText = getVisibleText(entry) || String(entry.textContent || '').replace(/\s+/g, ' ').trim();
+        const entryText = getMenuEntryText(entry) || String(entry.textContent || '').replace(/\s+/g, ' ').trim();
         if (!entryText) {
           continue;
         }
