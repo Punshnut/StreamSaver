@@ -426,13 +426,16 @@
   // so back-to-back automation calls (detect → set) share one continuous hider lifetime.
   let _menuHiderCount = 0;
 
-  /** Injects a CSS rule that makes Twitch player menus visually transparent while the
+  /** Injects a CSS rule that makes Twitch player menus visually invisible while the
    *  extension interacts with them.
-   *  - filter:opacity(0)  — hides menus visually without affecting isElementVisible() or
-   *                         getBoundingClientRect(), so all JS-driven interaction still works.
-   *  - pointer-events:none — lets document.elementFromPoint() see through the invisible menu
-   *                          to the player below, which is required for closeMenusIfNeeded's
-   *                          player-area click fallback to find a valid click target. */
+   *  - clip-path:inset(100%) — clips painted area to zero (invisible, non-hittable) while
+   *                            preserving the full CSS layout box. getBoundingClientRect()
+   *                            and offsetWidth/offsetHeight return real values, so all
+   *                            JS-driven visibility and geometry checks still work correctly
+   *                            in every browser including Firefox.
+   *  - pointer-events:none  — belt-and-suspenders: lets document.elementFromPoint() see
+   *                            through to the player below, required for closeMenusIfNeeded's
+   *                            player-area click fallback to find a valid click target. */
   function showMenuHider() {
     _menuHiderCount++;
     debug('menuHider: show', { count: _menuHiderCount, t: Date.now() });
@@ -443,7 +446,7 @@
       '[role="menu"],[role="listbox"],' +
       '[data-a-target*="settings-menu" i],' +
       '[data-a-target*="dropdown-menu" i],[data-test-selector*="menu" i],' +
-      '[class*="settings-menu" i]{filter:opacity(0)!important;pointer-events:none!important;}';
+      '[class*="settings-menu" i]{clip-path:inset(100%)!important;pointer-events:none!important;}';
     document.head.appendChild(style);
   }
 
@@ -1613,9 +1616,14 @@
 
     const indicatorSelector =
       '[aria-label*="check" i], [aria-label*="selected" i], [data-a-target*="check" i], [class*="checkmark" i], [class*="selected" i], svg';
-    const indicatorNodes = Array.from(entry.querySelectorAll(indicatorSelector)).filter((node) => isElementVisible(node));
+    const indicatorNodes = Array.from(entry.querySelectorAll(indicatorSelector)).filter((node) => {
+      if (!(node instanceof Element) || !node.isConnected) return false;
+      if (node.getAttribute('aria-hidden') === 'true') return false;
+      const s = window.getComputedStyle(node);
+      return s.display !== 'none' && s.visibility !== 'hidden' && s.visibility !== 'collapse';
+    });
     const hasCheckIndicator = indicatorNodes.some((node) => {
-      const visibleText = getVisibleText(node);
+      const visibleText = getMenuEntryText(node);
       if (/[✓✔☑]/.test(visibleText)) {
         return true;
       }
