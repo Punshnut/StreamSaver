@@ -19,6 +19,12 @@
   const SETTINGS_MENU_BACK_TERMS = ['zurück', 'zurueck', 'back', 'go back'];
   const SOURCE_TERMS = ['source', 'quelle', 'chunked'];
   const RESOLUTION_PATTERN = /\b(160|360|480|720|1080|1440|2160)\s*p?\d*\b/i;
+  const AD_INDICATOR_SELECTORS = [
+    '[data-test-selector="ad-banner-default-text"]',
+    '[data-test-selector="ad-banner"]',
+    '[data-a-target="ad-countdown"]',
+    '.video-ad-label',
+  ];
   const MODE_VALUES = {
     LOW: 'low',
     HIGH: 'high'
@@ -2565,6 +2571,9 @@
           if (clickTarget.closest('a[href], [role="link"], button, [role="button"], input, select, textarea, video')) {
             continue;
           }
+          if (isAdCurrentlyPlaying()) {
+            break;
+          }
           const mouseOptions = {
             bubbles: true,
             cancelable: true,
@@ -2836,6 +2845,14 @@
       return makeResponse(false, action, 'No Twitch player found on this page.', {
         targetQuality: normalizedTarget,
         step: playerRootResult,
+        pageSupport,
+        ...extraDetails
+      });
+    }
+
+    if (isAdCurrentlyPlaying()) {
+      return makeResponse(false, action, 'Quality change skipped — Twitch ad is currently playing.', {
+        targetQuality: normalizedTarget,
         pageSupport,
         ...extraDetails
       });
@@ -3189,6 +3206,11 @@
         return createResult(false, 'TAB_NOT_FOCUSED', 'Quality enforcement aborted — tab lost focus during setup.');
       }
 
+      if (isAdCurrentlyPlaying()) {
+        debug('quality enforcement: skipped because a Twitch ad is currently playing', { triggerReason });
+        return createResult(false, 'AD_PLAYING', 'Quality enforcement skipped — Twitch ad is playing.');
+      }
+
       // Skip detect+set entirely if we recently confirmed this quality on the same URL.
       // Force triggers (storage change, SPA nav, page show) always bypass this.
       const trustAge = Date.now() - enforcementState.lastConfirmedQualityAtMs;
@@ -3299,6 +3321,14 @@
   /** Returns true when the browser's fullscreen API has an active element. */
   function isBrowserInFullscreen() {
     return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+
+  /** Returns true when a Twitch ad is currently visible in the player. */
+  function isAdCurrentlyPlaying() {
+    return AD_INDICATOR_SELECTORS.some((sel) => {
+      const el = document.querySelector(sel);
+      return el !== null && el.offsetParent !== null;
+    });
   }
 
   /**
