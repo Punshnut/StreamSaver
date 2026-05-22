@@ -24,6 +24,10 @@
     '[data-test-selector="ad-banner"]',
     '[data-a-target="ad-countdown"]',
     '.video-ad-label',
+    // Mid-stream ad break: Twitch shows the real stream as a PiP mini-player.
+    // These elements only exist during commercial breaks.
+    '[data-a-target="picture-by-picture-player"]',
+    '[class*="picture-by-picture"]',
   ];
   const MODE_VALUES = {
     LOW: 'low',
@@ -3327,7 +3331,13 @@
   function isAdCurrentlyPlaying() {
     return AD_INDICATOR_SELECTORS.some((sel) => {
       const el = document.querySelector(sel);
-      return el !== null && el.offsetParent !== null;
+      if (el === null) return false;
+      if (el.offsetParent !== null) return true;
+      // position:fixed elements always have offsetParent===null; check their painted size instead.
+      const style = window.getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return false;
+      const rect = el.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
     });
   }
 
