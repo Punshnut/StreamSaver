@@ -25,9 +25,8 @@
     '[data-a-target="ad-countdown"]',
     '.video-ad-label',
     // Mid-stream ad break: Twitch shows the real stream as a PiP mini-player.
-    // These elements only exist during commercial breaks.
+    // This element only exists during commercial breaks.
     '[data-a-target="picture-by-picture-player"]',
-    '[class*="picture-by-picture"]',
   ];
   const MODE_VALUES = {
     LOW: 'low',

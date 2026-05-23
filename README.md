@@ -27,14 +27,13 @@ No coding is required. You are just loading the extension folder into your brows
 4. Open your browser's extensions page:
    - `chrome://extensions` for Chrome, Brave, Opera, Vivaldi, and Arc
    - `edge://extensions` for Edge
-   - `zen://extensions` for Zen
 5. Enable **Developer mode**.
 6. Click **Load unpacked**.
 7. Select the **extracted `StreamSaver` folder** from step 2.
 
 Important: do not select the ZIP file itself. You must extract it first, then import the folder created from that ZIP.
 
-## Install (Firefox)
+## Install (Firefox/Zen Browser)
 
 Firefox requires a signed extension file (`.xpi`). Download the latest `streamsaver-firefox-vX.X.xpi` from the releases page and open it - Firefox will prompt you to install it directly.
 

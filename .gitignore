@@ -6,6 +6,7 @@ dist/
 build/
 out/
 coverage/
+web-ext-artifacts/
 
 # Logs
 logs/
