@@ -210,6 +210,19 @@ body {
   color: #dbecff;
 }
 
+/* GitHub button: show "Update" by default, reveal "GitHub" on hover */
+.support-link-btn--github .btn-label--hover {
+  display: none;
+}
+.support-link-btn--github:hover .btn-label--default,
+.support-link-btn--github:focus-visible .btn-label--default {
+  display: none;
+}
+.support-link-btn--github:hover .btn-label--hover,
+.support-link-btn--github:focus-visible .btn-label--hover {
+  display: inline;
+}
+
 .support-link-btn--donate {
   color: #dcffe8;
 }
