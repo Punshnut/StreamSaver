@@ -204,6 +204,16 @@
       .replace(/\s+/g, ' ').trim();
   }
 
+  /** Returns true when a text-input element currently has focus (e.g. Twitch chat box). */
+  function isUserTypingInInput() {
+    const el = document.activeElement;
+    if (!el || el === document.body) return false;
+    const tag = el.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if (el.isContentEditable) return true;
+    return false;
+  }
+
   /** Performs a defensive click with pre-checks and safe focus/scroll attempts. */
   function clickElementSafely(element, options = {}) {
     if (!(element instanceof HTMLElement)) {
@@ -3131,6 +3141,12 @@
     if (document.visibilityState !== 'visible' || !document.hasFocus()) {
       debug('quality enforcement: skipped because tab is not visible or window is not focused', { triggerReason });
       return createResult(false, 'TAB_NOT_FOCUSED', 'Quality enforcement skipped — tab not visible or window not focused.');
+    }
+
+    if (isUserTypingInInput()) {
+      debug('quality enforcement: skipped because user is typing in a text input', { triggerReason });
+      scheduleEnsureDesiredQualityForCurrentMode('typing-resume', { delayMs: 1500 });
+      return createResult(false, 'USER_TYPING', 'Quality enforcement skipped — user is typing in a text input.');
     }
 
     enforcementState.inProgress = true;
