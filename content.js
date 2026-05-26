@@ -57,7 +57,9 @@
     lastRunUrl: '',
     lastResolvedTargetQuality: '',
     lastConfirmedQualityAtMs: 0, // when quality was last successfully confirmed (detect or set)
-    urlWatchTimerId: null
+    urlWatchTimerId: null,
+    adPollingTimerId: null,      // setInterval handle while waiting for an ad to finish
+    forcePendingAfterFocus: false // force enforcement was blocked by focus-loss; re-fire on next focus
   };
   const fullscreenState = {
     userIntended: false,       // user explicitly entered fullscreen
@@ -2930,8 +2932,13 @@
           ? attemptResult.details.resolutionAdjustment
           : null;
 
+      // Snapshot focus state once before the close passes.
+      // If the user tabbed away while attemptSetQuality was running we must not
+      // dispatch a player-area body click — it would land on the video overlay
+      // and toggle play/pause on the VOD (or live stream).
+      const windowHasFocus = document.visibilityState === 'visible' && document.hasFocus();
       let closeAfterResult = await closeMenusIfNeeded({
-        allowBodyClick: true,
+        allowBodyClick: windowHasFocus,
         aggressiveBodyClicks: true,
         waitBeforeMs: 350,
         maxAttempts: 2
@@ -2939,7 +2946,7 @@
       if (!closeAfterResult.ok) {
         debug('executeSetQualityAutomation: close-after first pass failed, retrying with extra settle delay', closeAfterResult);
         const closeAfterRetryResult = await closeMenusIfNeeded({
-          allowBodyClick: true,
+          allowBodyClick: windowHasFocus,
           aggressiveBodyClicks: true,
           waitBeforeMs: 500,
           maxAttempts: 2
@@ -3140,6 +3147,11 @@
 
     if (document.visibilityState !== 'visible' || !document.hasFocus()) {
       debug('quality enforcement: skipped because tab is not visible or window is not focused', { triggerReason });
+      // Remember that a force-trigger was blocked so we can replay it as force when
+      // focus returns (e.g. popup was open while user changed the resolution setting).
+      if (force) {
+        enforcementState.forcePendingAfterFocus = true;
+      }
       return createResult(false, 'TAB_NOT_FOCUSED', 'Quality enforcement skipped — tab not visible or window not focused.');
     }
 
@@ -3222,11 +3234,25 @@
       // accidentally toggling VOD play/pause via the outside-click fallback.
       if (document.visibilityState !== 'visible' || !document.hasFocus()) {
         debug('quality enforcement: aborted before DOM manipulation — tab lost focus during setup', { triggerReason });
+        if (force) {
+          enforcementState.forcePendingAfterFocus = true;
+        }
         return createResult(false, 'TAB_NOT_FOCUSED', 'Quality enforcement aborted — tab lost focus during setup.');
       }
 
       if (isAdCurrentlyPlaying()) {
         debug('quality enforcement: skipped because a Twitch ad is currently playing', { triggerReason });
+        // Poll every 2 s so we automatically enforce quality as soon as the ad ends —
+        // Twitch often resets to Auto/Source during an ad break.
+        if (!enforcementState.adPollingTimerId) {
+          enforcementState.adPollingTimerId = setInterval(() => {
+            if (isAdCurrentlyPlaying()) return; // still in the ad
+            clearInterval(enforcementState.adPollingTimerId);
+            enforcementState.adPollingTimerId = null;
+            debug('quality enforcement: ad ended — scheduling post-ad enforcement');
+            scheduleEnsureDesiredQualityForCurrentMode('ad-ended', { force: true, delayMs: 800 });
+          }, 2000);
+        }
         return createResult(false, 'AD_PLAYING', 'Quality enforcement skipped — Twitch ad is playing.');
       }
 
@@ -3462,6 +3488,12 @@
       });
     });
 
+    // Cancel any in-flight ad polling timer before starting fresh (safety for re-init).
+    if (enforcementState.adPollingTimerId) {
+      clearInterval(enforcementState.adPollingTimerId);
+      enforcementState.adPollingTimerId = null;
+    }
+
     // Compare only origin+pathname so query-param-only changes (e.g. Twitch VOD ?t= timestamp
     // updates that fire every ~10 s during playback) are not treated as SPA navigations.
     const getUrlKey = () => location.origin + location.pathname;
@@ -3497,7 +3529,12 @@
 
     window.addEventListener('focus', () => {
       debug('quality enforcement: window focused');
+      // If a force-enforcement was blocked while focus was away (e.g. popup open during
+      // a resolution change), replay it as force now so it bypasses cooldown and trust TTL.
+      const hadForcePending = enforcementState.forcePendingAfterFocus;
+      enforcementState.forcePendingAfterFocus = false;
       scheduleEnsureDesiredQualityForCurrentMode('window-focus', {
+        force: hadForcePending,
         delayMs: 300
       });
     });
