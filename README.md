@@ -71,13 +71,13 @@ On some systems running recent versions of Firefox, StreamSaver may display the 
 
 StreamSaver only activates on Twitch pages. Its content script runs exclusively on `https://www.twitch.tv/*` - other websites cannot detect the extension is installed. No data is collected or transmitted; all settings are stored locally in your browser.
 
-## Support
+## Resources
 
-[Ko-Fi](https://ko-fi.com/janfeuerbacher)
-
-## Contributing
-
-See [docs/building.md](docs/building.md) for build instructions and source layout.
+<table>
+  <tr><td>📦 <strong>Download</strong></td><td><a href="https://github.com/Punshnut/StreamSaver/releases/latest">Latest release</a></td></tr>
+  <tr><td>☕ <strong>Support</strong></td><td><a href="https://ko-fi.com/janfeuerbacher">Ko-Fi</a></td></tr>
+  <tr><td>🔧 <strong>Build</strong></td><td><a href="docs/building.md">docs/building.md</a></td></tr>
+</table>
 
 ## Disclaimer
 
