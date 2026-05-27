@@ -54,7 +54,7 @@ body {
   --busy-border: #395f96;
   position: relative;
   width: 100%;
-  padding: 14px;
+  padding: 12px;
   overflow: hidden;
 }
 
@@ -104,7 +104,7 @@ body {
 }
 
 .hero {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   padding: 10px 12px;
   border: 1px solid var(--panel-border);
   border-radius: 12px;
@@ -228,7 +228,7 @@ body {
 }
 
 .panel {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   padding: 10px;
   border: 1px solid var(--panel-border);
   border-radius: 10px;
@@ -326,13 +326,18 @@ body {
 
 .quality-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
 }
 
 .quality-btn {
-  min-height: 34px;
-  padding: 7px 4px;
+  min-height: 28px;
+  padding: 5px 4px;
   font-size: 11px;
   font-weight: 700;
+}
+
+.quality-btn--auto {
+  grid-column: 1 / -1;
 }
 
 /* Action controls */
@@ -420,7 +425,7 @@ button:disabled:hover {
   grid-template-columns: 48px 1fr;
   align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .row label {
@@ -519,7 +524,7 @@ select option {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  margin: 2px 0 10px;
+  margin: 2px 0 8px;
   padding: 8px;
   border: 1px solid rgba(var(--accent-rgb), 0.3);
   border-radius: 10px;

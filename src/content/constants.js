@@ -10,16 +10,15 @@ export const QUALITY_ORDER_MAP = QUALITY_VALUES.reduce((acc, quality, index) => 
   return acc;
 }, {});
 
-export const QUALITY_ENTRY_TERMS = ['quality', 'qualität', 'video quality', 'resolution', 'auflösung'];
-export const SETTINGS_TRIGGER_TERMS = ['settings', 'einstellungen'];
-export const SETTINGS_MENU_LABEL_GROUPS = {
-  quality: ['qualität', 'quality', 'auflösung', 'resolution'],
-  subtitles: ['untertitel', 'subtitles'],
-  advanced: ['erweitert', 'advanced']
-};
-export const SETTINGS_MENU_CLOSE_TERMS = ['schließen', 'schliessen', 'close'];
-export const SETTINGS_MENU_BACK_TERMS = ['zurück', 'zurueck', 'back', 'go back'];
-export const SOURCE_TERMS = ['source', 'quelle', 'chunked'];
+export {
+  SOURCE_TERMS,
+  AUTO_TERMS,
+  QUALITY_ENTRY_TERMS,
+  SETTINGS_TRIGGER_TERMS,
+  SETTINGS_MENU_LABEL_GROUPS,
+  SETTINGS_MENU_CLOSE_TERMS,
+  SETTINGS_MENU_BACK_TERMS,
+} from './locale-terms.js';
 export const RESOLUTION_PATTERN = /\b(160|360|480|720|1080|1440|2160)\s*p?\d*\b/i;
 export const AD_INDICATOR_SELECTORS = [
   '[data-test-selector="ad-banner-default-text"]',

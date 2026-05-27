@@ -61,12 +61,6 @@ All available resolutions are selectable, so you can shape the setup exactly how
 - Twitch UI changes can require updates
 - Some quality levels may be unavailable per stream/transcoder conditions
 
-## Known Issues
-
-**Firefox: Quality changes may not take effect (recent versions)**
-
-On some systems running recent versions of Firefox, StreamSaver may display the selected quality in the popup but the stream does not actually switch to that resolution. This appears to be caused by changes in how recent Firefox builds handle programmatic interaction with the Twitch player UI. Chromium-based browsers (Chrome, Brave, Edge, Opera, Vivaldi, Arc) and Zen are unaffected and work as expected. A fix is being investigated.
-
 ## Privacy
 
 StreamSaver only activates on Twitch pages. Its content script runs exclusively on `https://www.twitch.tv/*` - other websites cannot detect the extension is installed. No data is collected or transmitted; all settings are stored locally in your browser.

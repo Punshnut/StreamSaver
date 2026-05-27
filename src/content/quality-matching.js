@@ -1,4 +1,4 @@
-import { SOURCE_TERMS, QUALITY_SET, QUALITY_ENTRY_TERMS, RESOLUTION_PATTERN } from './constants.js';
+import { SOURCE_TERMS, AUTO_TERMS, QUALITY_SET, QUALITY_ENTRY_TERMS, RESOLUTION_PATTERN } from './constants.js';
 
 /** Normalizes Twitch quality labels into extension-level quality keys. */
 export function normalizeQualityLabel(label) {
@@ -8,6 +8,7 @@ export function normalizeQualityLabel(label) {
   }
 
   const lower = raw.toLowerCase();
+  if (AUTO_TERMS.some((term) => lower.startsWith(term))) return 'Auto';
   if (SOURCE_TERMS.some((term) => lower.includes(term))) return 'Source';
   if (hasResolutionValue(lower, '2160')) return '2160p';
   if (hasResolutionValue(lower, '1440')) return '1440p';
@@ -101,6 +102,11 @@ export function qualityLabelMatchesTarget(label, normalizedTarget, options = {})
   const lower = String(label || '').toLowerCase();
   if (!lower || !QUALITY_SET.has(normalizedTarget)) {
     return false;
+  }
+
+  if (normalizedTarget === 'Auto') {
+    // Auto can appear as Auto, Automatisch, Automatique, or similar.
+    return AUTO_TERMS.some((term) => lower.startsWith(term));
   }
 
   if (normalizedTarget === 'Source') {

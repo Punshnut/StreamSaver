@@ -98,6 +98,7 @@ export function setQuickResolutionVisibility(visible) {
     quickResolutionToggle.checked = nextVisible;
     quickResolutionToggle.setAttribute('aria-expanded', String(nextVisible));
   }
+
 }
 
 /** Syncs plugin enable/disable switch state and related visual cues. */
