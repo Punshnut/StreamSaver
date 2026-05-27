@@ -480,8 +480,12 @@
     // If menus are still open, make one extra close attempt. pointer-events:none is still
     // active here, so document.elementFromPoint() sees through the invisible menu to the
     // player — this is the path that was failing at channel-join time.
+    // Only allow a player-area body click when the window is actually focused;
+    // an unfocused body click lands on Twitch's play/pause overlay and toggles
+    // VOD/stream playback state.
     if (findVisibleMenuRoots().length > 0) {
-      await closeMenusIfNeeded({ allowBodyClick: true, aggressiveBodyClicks: true, maxAttempts: 2 });
+      const canBodyClick = document.visibilityState === 'visible' && document.hasFocus();
+      await closeMenusIfNeeded({ allowBodyClick: canBodyClick, aggressiveBodyClicks: true, maxAttempts: 2 });
     }
     // Poll briefly to confirm menus are gone before lifting the hider.
     const deadline = Date.now() + 400;
@@ -491,6 +495,30 @@
       await wait(60);
     }
     if (_menuHiderCount > 0) return;
+
+    // If the window is not focused and menus are still open, keep the hider CSS
+    // active so the user never sees a stuck quality menu when they tab back in.
+    // Schedule a safe cleanup pass (no body click) for when focus returns.
+    if (findVisibleMenuRoots().length > 0 && (!document.hasFocus() || document.visibilityState !== 'visible')) {
+      debug('menuHider: deferring hider removal — unfocused with menus still open', { t: Date.now() });
+      const onFocus = async () => {
+        if (_menuHiderCount > 0) return; // a new automation took ownership
+        await wait(150);
+        await closeMenusIfNeeded({ allowBodyClick: false, aggressiveBodyClicks: true, maxAttempts: 3 });
+        const dl = Date.now() + 400;
+        while (Date.now() < dl) {
+          if (_menuHiderCount > 0) return;
+          if (findVisibleMenuRoots().length === 0) break;
+          await wait(60);
+        }
+        if (_menuHiderCount > 0) return;
+        debug('menuHider: hide (deferred, on focus)', { t: Date.now() });
+        document.getElementById('streamsaver-menu-hider')?.remove();
+      };
+      window.addEventListener('focus', () => { onFocus().catch(() => {}); }, { once: true });
+      return;
+    }
+
     debug('menuHider: hide (lock lifted)', { t: Date.now() });
     document.getElementById('streamsaver-menu-hider')?.remove();
   }
@@ -2587,6 +2615,14 @@
             continue;
           }
           if (isAdCurrentlyPlaying()) {
+            break;
+          }
+          // Re-check focus at dispatch time — the allowBodyClick flag was set before
+          // the preceding await operations (escape key, back button, toggle retries)
+          // and may be stale. A stale true flag would cause a body click on Twitch's
+          // play/pause overlay, toggling VOD/stream play state.
+          if (!document.hasFocus() || document.visibilityState !== 'visible') {
+            debug('closeMenusIfNeeded: aborting body click — focus lost since allowBodyClick was set');
             break;
           }
           const mouseOptions = {
