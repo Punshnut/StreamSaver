@@ -1,0 +1,26 @@
+{
+  "name": "streamsaver",
+  "version": "1.2.16",
+  "description": "Lightweight, persistent Twitch quality control: lock resolutions, toggle presets, auto-reapply. No more manual resets - across Chrome, Edge, Brave, Opera, Vivaldi, Arc, Zen, and Firefox",
+  "main": "src/content/main.js",
+  "scripts": {
+    "build": "bash build.sh all",
+    "build:chrome": "bash build.sh chrome",
+    "build:firefox": "bash build.sh firefox"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Punshnut/StreamSaver.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Punshnut/StreamSaver/issues"
+  },
+  "homepage": "https://github.com/Punshnut/StreamSaver#readme",
+  "devDependencies": {
+    "esbuild": "^0.28.0"
+  }
+}

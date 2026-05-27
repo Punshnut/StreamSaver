@@ -75,6 +75,10 @@ StreamSaver only activates on Twitch pages. Its content script runs exclusively 
 
 [Ko-Fi](https://ko-fi.com/janfeuerbacher)
 
+## Contributing
+
+See [docs/building.md](docs/building.md) for build instructions and source layout.
+
 ## Disclaimer
 
 StreamSaver is an independent project and is not affiliated with Twitch.

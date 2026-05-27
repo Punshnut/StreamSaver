@@ -30,5 +30,7 @@ Thumbs.db
 *.swp
 *.swo
 
-# Local scripts and media (temporary)
+# Shell scripts are local-only (sign-firefox.sh contains credentials).
+# build-extension.sh is the public exception — safe for anyone to run.
 *.sh
+!build-extension.sh
