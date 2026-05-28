@@ -105,15 +105,10 @@ export async function attemptRestoreTwitchFullscreen() {
     return;
   }
 
-  const combined = [
-    btn.getAttribute('aria-label') || '',
-    btn.getAttribute('title') || ''
-  ].join(' ').toLowerCase();
-
-  // If the button already shows "exit fullscreen" state, Twitch's internal model
-  // still considers itself in fullscreen — don't click or we'll exit again.
-  if (combined.includes('exit') || combined.includes('beenden')) {
-    debug('fullscreen restore: button is in exit-fullscreen state, skipping');
+  // If the Fullscreen API still reports fullscreen, Twitch's internal model
+  // considers itself in fullscreen — don't click the button or we'll exit again.
+  if (isBrowserInFullscreen()) {
+    debug('fullscreen restore: already in fullscreen per API, skipping click');
     return;
   }
 

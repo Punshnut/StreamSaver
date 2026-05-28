@@ -5,11 +5,7 @@
  * organised by language. Add a new locale block here to support an additional
  * Twitch UI language — no other file needs to change.
  *
- * Structure
- * ---------
- * CORE_LOCALES   — always active (en + de ship by default)
- * EXTENDED_LOCALES — currently unused; reserved for a future "rare languages" setting
- *                   that the user can toggle on in the popup
+ * CORE_LOCALES covers all 12 languages Twitch natively supports in its UI.
  *
  * Each locale entry has these optional keys (omit a key if the language reuses
  * an English term or if the term simply doesn't exist in that language):
@@ -95,7 +91,7 @@ const TERMS_BY_LOCALE = {
     settingsBack:      ['voltar'],
   },
 
-  // Italian / Italiano  (extended — not active by default)
+  // Italian / Italiano
   it: {
     source:            ['sorgente'],
     auto:              ['automatico'],
@@ -108,20 +104,7 @@ const TERMS_BY_LOCALE = {
     settingsBack:      ['indietro'],
   },
 
-  // Polish / Polski  (extended — not active by default)
-  pl: {
-    source:            ['źródło', 'zrodlo'],
-    auto:              ['automatyczna', 'auto'],
-    qualityEntry:      ['jakość', 'jakosc'],
-    settingsTrigger:   ['ustawienia'],
-    settingsQuality:   ['jakość', 'jakosc'],
-    settingsSubtitles: ['napisy'],
-    settingsAdvanced:  ['zaawansowane'],
-    settingsClose:     ['zamknij'],
-    settingsBack:      ['wstecz'],
-  },
-
-  // Russian / Русский  (extended — not active by default)
+  // Russian / Русский
   ru: {
     auto:              ['авто'],
     qualityEntry:      ['качество'],
@@ -132,20 +115,78 @@ const TERMS_BY_LOCALE = {
     settingsClose:     ['закрыть'],
     settingsBack:      ['назад'],
   },
+
+  // Japanese / 日本語
+  ja: {
+    source:            ['ソース'],
+    auto:              ['自動'],
+    qualityEntry:      ['画質', '解像度'],
+    settingsTrigger:   ['設定'],
+    settingsQuality:   ['画質', '解像度'],
+    settingsSubtitles: ['字幕'],
+    settingsAdvanced:  ['詳細設定', '詳細'],
+    settingsClose:     ['閉じる'],
+    settingsBack:      ['戻る'],
+  },
+
+  // Simplified Chinese / 简体中文
+  'zh-CN': {
+    source:            ['原始', '源'],
+    auto:              ['自动'],
+    qualityEntry:      ['画质', '分辨率'],
+    settingsTrigger:   ['设置'],
+    settingsQuality:   ['画质', '分辨率'],
+    settingsSubtitles: ['字幕'],
+    settingsAdvanced:  ['高级'],
+    settingsClose:     ['关闭'],
+    settingsBack:      ['返回', '后退'],
+  },
+
+  // Bahasa Indonesia
+  id: {
+    source:            ['sumber'],
+    auto:              ['otomatis'],
+    qualityEntry:      ['kualitas', 'resolusi'],
+    settingsTrigger:   ['pengaturan'],
+    settingsQuality:   ['kualitas', 'resolusi'],
+    settingsSubtitles: ['teks'],
+    settingsAdvanced:  ['lanjutan'],
+    settingsClose:     ['tutup'],
+    settingsBack:      ['kembali'],
+  },
+
+  // Danish / Dansk
+  da: {
+    source:            ['kilde'],
+    auto:              ['automatisk'],
+    qualityEntry:      ['kvalitet', 'opløsning', 'oplosning'],
+    settingsTrigger:   ['indstillinger'],
+    settingsQuality:   ['kvalitet', 'opløsning', 'oplosning'],
+    settingsSubtitles: ['undertekster'],
+    settingsAdvanced:  ['avanceret'],
+    settingsClose:     ['luk'],
+    settingsBack:      ['tilbage'],
+  },
+
+  // Ukrainian / Українська  (beta)  TODO: verify against live Twitch Ukrainian UI
+  uk: {
+    source:            ['джерело'],
+    auto:              ['авто'],
+    qualityEntry:      ['якість', 'роздільна здатність'],
+    settingsTrigger:   ['налаштування'],
+    settingsQuality:   ['якість'],
+    settingsSubtitles: ['субтитри'],
+    settingsAdvanced:  ['розширені'],
+    settingsClose:     ['закрити'],
+    settingsBack:      ['назад', 'повернутися'],
+  },
 };
 
 // ---------------------------------------------------------------------------
-// Active locale sets
+// Active locale set — all 12 Twitch-native UI languages
 // ---------------------------------------------------------------------------
 
-/** Always-on languages. Covers the vast majority of Twitch users. */
-export const CORE_LOCALES = ['en', 'de', 'fr', 'es', 'pt'];
-
-/**
- * Opt-in languages for future "enable rare languages" setting.
- * Currently unused — reserved so the infrastructure is ready.
- */
-export const EXTENDED_LOCALES = ['it', 'pl', 'ru'];
+export const CORE_LOCALES = ['en', 'de', 'fr', 'es', 'pt', 'it', 'ru', 'ja', 'zh-CN', 'id', 'da', 'uk'];
 
 // ---------------------------------------------------------------------------
 // Merge helpers
@@ -162,13 +203,7 @@ function mergeKey(key, locales) {
   return out;
 }
 
-/**
- * Build the flat term arrays used by the rest of the content script from a
- * given set of active locale codes. Pass [...CORE_LOCALES, ...EXTENDED_LOCALES]
- * when the user enables the "rare languages" setting in the future.
- *
- * @param {string[]} locales
- */
+/** @param {string[]} locales */
 export function buildTermsForLocales(locales) {
   return {
     SOURCE_TERMS:              mergeKey('source',            locales),
