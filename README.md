@@ -61,6 +61,14 @@ All available resolutions are selectable, so you can shape the setup exactly how
 - Twitch UI changes can require updates
 - Some quality levels may be unavailable per stream/transcoder conditions
 
+## A Quick Note on the Settings Menu
+
+StreamSaver works by briefly opening and closing Twitch's player settings menu in the background to check or set your resolution. The menu is hidden while this happens, so you won't see it flicker - but if you try to open the settings menu yourself right as the extension is doing its thing, you may have to wait about a second before it responds again.
+
+**The good news:** you probably won't need to touch it at all. StreamSaver handles everything for you. 🎉
+
+And don't worry about chat - the extension is smart enough to detect when you're typing and keeps its hands off. Everything comes with a cost, but I am working on making it even snappier. 😄
+
 ## Privacy
 
 StreamSaver only activates on Twitch pages. Its content script runs exclusively on `https://www.twitch.tv/*` - other websites cannot detect the extension is installed. No data is collected or transmitted; all settings are stored locally in your browser.

@@ -1,6 +1,6 @@
-import { SETTINGS_KEYS, MODE_VALUES } from './constants.js';
+import { SETTINGS_KEYS, MODE_VALUES, DEFAULT_SETTINGS } from './constants.js';
 import { qualityButtons, modeLowButton, modeHighButton, pluginEnabledToggle, quickResolutionToggle, fastToggleLow, fastToggleHigh, isPluginEnabled, isQuickResolutionVisible, setQuickResolutionVisibility, setPluginEnabledState } from './ui.js';
-import { syncModeButtonsState, handleQualityButtonClick, handleModeButtonClick, getModeLabel, readModeResolutions, currentActiveMode, sanitizeModeValue, isSupportedQuality } from './mode-quality.js';
+import { syncModeButtonsState, handleQualityButtonClick, handleModeButtonClick, getModeLabel, readModeResolutions, currentActiveMode, sanitizeModeValue, sanitizeQualityValue, isSupportedQuality } from './mode-quality.js';
 import { runActionWithStatus, buildSetQualityRequest } from './messaging.js';
 import { loadSettings, saveSetting, handleSelectChange } from './settings.js';
 import { refreshIdleStatus } from './idle-status.js';
@@ -26,10 +26,18 @@ function bindActionHandlers() {
 
 fastToggleLow.addEventListener('change', () => {
   handleSelectChange(SETTINGS_KEYS.LOW, fastToggleLow);
+  if (currentActiveMode === MODE_VALUES.LOW) {
+    const quality = sanitizeQualityValue(fastToggleLow.value, DEFAULT_SETTINGS[SETTINGS_KEYS.LOW]);
+    runActionWithStatus(buildSetQualityRequest(quality), `Applying ${quality}...`);
+  }
 });
 
 fastToggleHigh.addEventListener('change', () => {
   handleSelectChange(SETTINGS_KEYS.HIGH, fastToggleHigh);
+  if (currentActiveMode === MODE_VALUES.HIGH) {
+    const quality = sanitizeQualityValue(fastToggleHigh.value, DEFAULT_SETTINGS[SETTINGS_KEYS.HIGH]);
+    runActionWithStatus(buildSetQualityRequest(quality), `Applying ${quality}...`);
+  }
 });
 
 if (pluginEnabledToggle instanceof HTMLInputElement) {

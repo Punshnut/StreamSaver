@@ -1,6 +1,6 @@
 import { SETTINGS_MENU_LABEL_GROUPS, SETTINGS_MENU_CLOSE_TERMS } from './constants.js';
 import { debug, createResult, isElementVisible, isMenuEntryUsable, getMenuEntryText, wait, clickElementSafely, waitForCondition } from './utils.js';
-import { serializeRect, isRectNear } from './geometry.js';
+import { serializeRect, isRectInside, isRectNear } from './geometry.js';
 import { getPlayerRoot, triggerPlayerHover, findPlayerControlScopes, collectSettingsButtonCandidates } from './player.js';
 import { findVisibleMenuRoots, findSettingsMenuRootsByText, findPlayerNearQualityPanel } from './menu-find.js';
 import { closeMenusIfNeeded } from './menu-close.js';
