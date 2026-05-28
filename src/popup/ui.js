@@ -1,6 +1,28 @@
+/**
+ * popup/ui.js
+ *
+ * DOM state management for the popup. Owns all direct references to HTML
+ * elements and exposes them as module-level exports so other modules can read
+ * them without querying the DOM themselves.
+ *
+ * State exports (let — mutated by setter functions below):
+ *   isRoundActive           — true while an action is in flight; blocks new clicks
+ *   isQuickResolutionVisible — current visibility of the quick-resolution panel
+ *   isPluginEnabled          — mirrors the stored plugin-enabled flag
+ *   idleStatusType/Message   — the "resting" status shown after temp messages expire
+ *
+ * Key functions:
+ *   setStatus / setIdleStatus     — status bar updates
+ *   lockControls / releaseControls — UI action mutex
+ *   setQuickResolutionVisibility  — panel show/hide sync
+ *   setPluginEnabledState         — toggle + label + CSS data-attr sync
+ *   setReleaseCallback            — breaks circular dep with mode-quality.js
+ */
+
 import { STATUS_TYPES, SETTINGS_KEYS, DEFAULT_SETTINGS, READY_STATUS_MESSAGE, DISABLED_STATUS_MESSAGE, MODE_VALUES, MODE_SET } from './constants.js';
 
-// DOM element refs
+// ─── DOM element references ───────────────────────────────────────────────────
+// Queried once at module evaluation time — the popup DOM is static.
 export const statusEl = document.getElementById('status');
 export const popupRoot = document.querySelector('.popup');
 export const modeLowButton = document.getElementById('mode-low-btn');
@@ -13,19 +35,22 @@ export const pluginEnabledToggle = document.getElementById('plugin-enabled');
 export const pluginEnabledLabel = document.getElementById('plugin-enabled-label');
 export const quickResolutionToggle = document.getElementById('quick-resolution-visible');
 export const quickResolutionContent = document.getElementById('quick-resolution-content');
+
+// Flat list of all clickable action buttons — used to disable/enable them as a group.
 export const actionButtons = [...qualityButtons, modeLowButton, modeHighButton].filter(
   (button) => button instanceof HTMLButtonElement
 );
 
-// Module-level state
-export let statusResetTimer = null;
-export let isRoundActive = false;
+// ─── Mutable module state ──────────────────────────────────────────────────────
+export let statusResetTimer = null;   // handle for the pending auto-reset timer
+export let isRoundActive = false;     // true while an action is in flight
 export let isQuickResolutionVisible = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.QUICK_RESOLUTION_VISIBLE]);
 export let isPluginEnabled = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.PLUGIN_ENABLED]);
-export let idleStatusType = STATUS_TYPES.SUCCESS;
-export let idleStatusMessage = READY_STATUS_MESSAGE;
+export let idleStatusType = STATUS_TYPES.SUCCESS;      // resting status type
+export let idleStatusMessage = READY_STATUS_MESSAGE;   // resting status text
 
-// Callback pattern to break circular dep: releaseControls → refreshModeHUD (in mode-quality.js)
+// Callback pattern to break the circular dependency between ui.js and mode-quality.js:
+// mode-quality.js registers refreshModeHUD here so releaseControls() can call it.
 let onActionComplete = () => {};
 export function setReleaseCallback(fn) { onActionComplete = fn; }
 
@@ -37,13 +62,15 @@ export function clearStatusResetTimer() {
   }
 }
 
-/** Sets popup status and optional auto-reset. */
+/** Sets popup status and optional auto-reset.
+ *  When autoResetMs > 0, reverts to the idle status after the given delay. */
 export function setStatus(type, message, autoResetMs = 0) {
-  clearStatusResetTimer();
-  statusEl.dataset.state = type;
+  clearStatusResetTimer(); // cancel any in-flight reset before setting the new message
+  statusEl.dataset.state = type;   // drives CSS styling (color, icon)
   statusEl.textContent = message;
 
   if (autoResetMs > 0) {
+    // Schedule a revert to the idle (resting) status after the success message has been read.
     statusResetTimer = setTimeout(() => {
       statusEl.dataset.state = idleStatusType;
       statusEl.textContent = idleStatusMessage;
@@ -56,6 +83,7 @@ export function setStatus(type, message, autoResetMs = 0) {
 export function setIdleStatus(type, message) {
   idleStatusType = type;
   idleStatusMessage = message;
+  // Does not update the status bar immediately — use setStatus() for that.
 }
 
 /** Toggles all popup action buttons. */
@@ -67,13 +95,14 @@ export function setActionButtonsDisabled(disabled) {
 
 /** Starts an action; returns false when busy. */
 export function lockControls(loadingMessage) {
+  // Reject the new action if one is already running — prevents stacked requests.
   if (isRoundActive) {
     setStatus(STATUS_TYPES.LOADING, 'Another action is still running...');
     return false;
   }
 
   isRoundActive = true;
-  setActionButtonsDisabled(true);
+  setActionButtonsDisabled(true);  // prevent double-clicks
   setStatus(STATUS_TYPES.LOADING, loadingMessage);
   return true;
 }
@@ -82,23 +111,27 @@ export function lockControls(loadingMessage) {
 export function releaseControls() {
   isRoundActive = false;
   setActionButtonsDisabled(false);
+  // Fire the registered callback (refreshModeHUD) so the mode HUD always
+  // reflects current state after any action completes.
   onActionComplete();
 }
 
-/** Syncs Quick Resolution visibility and ARIA state. */
+/** Syncs Quick Resolution panel visibility and ARIA state. */
 export function setQuickResolutionVisibility(visible) {
   const nextVisible = Boolean(visible);
   isQuickResolutionVisible = nextVisible;
 
+  // hidden attribute controls layout — avoids CSS visibility quirks.
   if (quickResolutionContent instanceof HTMLElement) {
     quickResolutionContent.hidden = !nextVisible;
   }
 
+  // Keep the toggle input in sync with the actual state.
   if (quickResolutionToggle instanceof HTMLInputElement) {
     quickResolutionToggle.checked = nextVisible;
+    // aria-expanded communicates the panel's open/closed state to screen readers.
     quickResolutionToggle.setAttribute('aria-expanded', String(nextVisible));
   }
-
 }
 
 /** Syncs plugin enable/disable switch state and related visual cues. */
@@ -106,18 +139,23 @@ export function setPluginEnabledState(enabled) {
   const nextEnabled = Boolean(enabled);
   isPluginEnabled = nextEnabled;
 
+  // data-plugin-enabled on the root drives CSS rules that dim the UI when disabled.
   if (popupRoot instanceof HTMLElement) {
     popupRoot.dataset.pluginEnabled = String(nextEnabled);
   }
 
+  // Keep the toggle visually and semantically in sync.
   if (pluginEnabledToggle instanceof HTMLInputElement) {
     pluginEnabledToggle.checked = nextEnabled;
     pluginEnabledToggle.setAttribute('aria-checked', String(nextEnabled));
   }
 
+  // Text label next to the toggle ("Enabled" / "Disabled").
   if (pluginEnabledLabel instanceof HTMLElement) {
     pluginEnabledLabel.textContent = nextEnabled ? 'Enabled' : 'Disabled';
   }
 
+  // Also update the idle status message so the "plugin is disabled" notice appears
+  // in the status bar when the popup re-opens while the plugin is off.
   setIdleStatus(STATUS_TYPES.SUCCESS, nextEnabled ? READY_STATUS_MESSAGE : DISABLED_STATUS_MESSAGE);
 }

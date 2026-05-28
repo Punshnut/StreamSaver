@@ -1,3 +1,18 @@
+/**
+ * content/constants.js
+ *
+ * All compile-time and runtime constants for the content script.
+ * This is the single source of truth for:
+ *   - Quality and mode value sets (re-exported from shared)
+ *   - Debug flags
+ *   - CSS selector strings used across multiple modules
+ *   - All timing delays (tweak latencies here only, not in individual files)
+ *   - Extension storage key names and their defaults
+ *   - The missionState and arenaState shared-mutable objects that track
+ *     enforcement lifecycle and fullscreen intent across async calls
+ *   - Locale-aware UI search terms (re-exported from locale-terms.js)
+ */
+
 export { QUALITY_VALUES, QUALITY_SET, MODE_VALUES, MODE_SET } from '../shared/constants.js';
 import { QUALITY_VALUES, MODE_VALUES } from '../shared/constants.js';
 

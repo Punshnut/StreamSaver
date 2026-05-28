@@ -1,3 +1,15 @@
+/**
+ * popup/mode-quality.js
+ *
+ * Handles the two-mode system (Travel / High Quality) and the quality button
+ * interactions in the popup.
+ *
+ * currentActiveMode        — module-level variable for the active mode key
+ * refreshModeHUD()         — syncs button states and summary text
+ * handleQualityButtonClick() — dispatches a direct quality-set action
+ * handleModeButtonClick()  — saves mode, applies its quality, updates HUD
+ */
+
 import { QUALITY_SET, MODE_SET, MODE_VALUES, MODE_LABELS, SETTINGS_KEYS, DEFAULT_SETTINGS, STATUS_TYPES } from './constants.js';
 import { resolveQuality } from '../shared/constants.js';
 import { isPluginEnabled, setStatus, popupRoot, modeLowButton, modeHighButton, modeSummaryEl, fastToggleLow, fastToggleHigh, setReleaseCallback } from './ui.js';
@@ -5,9 +17,10 @@ import { launchActionWithStatus, craftQualityRequest } from './messaging.js';
 import { saveSetting } from './settings.js';
 
 // currentActiveMode lives here because all mode-related logic is in this module.
-// settings.js sets it via setCurrentActiveMode().
+// settings.js sets it via setCurrentActiveMode() after loading from storage.
 export let currentActiveMode = DEFAULT_SETTINGS[SETTINGS_KEYS.ACTIVE_MODE];
 
+/** Updates the in-memory mode value (called by settings.js after storage load). */
 export function setCurrentActiveMode(value) {
   currentActiveMode = value;
 }
@@ -18,6 +31,7 @@ export function setCurrentActiveMode(value) {
 
 /** Accepts only supported quality values and falls back otherwise. */
 export function sanitizeQualityValue(value, fallback) {
+  // resolveQuality returns fallback for any value not in QUALITY_SET.
   return resolveQuality(value, fallback);
 }
 
@@ -33,6 +47,7 @@ export function isSupportedQuality(value) {
 
 /** Returns the display label for a mode key. */
 export function getModeLabel(mode) {
+  // Fallback to HIGH label for unknown mode keys so the HUD never shows undefined.
   return MODE_LABELS[mode] || MODE_LABELS[MODE_VALUES.HIGH];
 }
 
@@ -50,17 +65,26 @@ export function refreshModeHUD() {
   const lowIsActive = activeMode === MODE_VALUES.LOW;
   const highIsActive = activeMode === MODE_VALUES.HIGH;
 
+  // data-active-mode drives CSS rules that style the active mode section.
   if (popupRoot instanceof HTMLElement) {
     popupRoot.dataset.activeMode = activeMode;
   }
+
+  // Toggle the visual active state on each mode button.
   modeLowButton.dataset.active = String(lowIsActive);
   modeHighButton.dataset.active = String(highIsActive);
+
+  // aria-pressed communicates toggle button state to screen readers.
   modeLowButton.setAttribute('aria-pressed', String(lowIsActive));
   modeHighButton.setAttribute('aria-pressed', String(highIsActive));
+
+  // Plain-language summary for sighted users.
   modeSummaryEl.textContent = `Current mode: ${getModeLabel(activeMode)}`;
 }
 
 // Register the callback now that refreshModeHUD is defined.
+// releaseControls() will call this after every action completes so the HUD
+// is always in sync even when an action was triggered from another module.
 setReleaseCallback(refreshModeHUD);
 
 /** Handles one quick-resolution button click and dispatches setQuality. */
@@ -68,6 +92,7 @@ export function handleQualityButtonClick(button) {
   const quality = sanitizeQualityValue(button.dataset.quality, 'Unknown');
   console.log(`[StreamSaver][popup] Quality click: ${quality}`);
 
+  // Reject unknown values that somehow got into the button's data attribute.
   if (!isSupportedQuality(quality)) {
     setStatus(STATUS_TYPES.ERROR, 'Unsupported quality button value.');
     return;
@@ -80,26 +105,33 @@ export function handleQualityButtonClick(button) {
 export async function handleModeButtonClick(mode) {
   const normalizedMode = sanitizeModeValue(mode, MODE_VALUES.HIGH);
 
+  // No-op if the clicked mode is already active — show a brief confirmation.
   if (normalizedMode === currentActiveMode) {
     setStatus(STATUS_TYPES.SUCCESS, `Mode already set: ${getModeLabel(normalizedMode)}.`, 1000);
     return;
   }
 
+  // Optimistically update the HUD before the storage write so the UI feels instant.
   const previousMode = currentActiveMode;
   currentActiveMode = normalizedMode;
   refreshModeHUD();
+
+  // Persist the new mode — roll back the optimistic update if the save fails.
   const didSave = await saveSetting(SETTINGS_KEYS.ACTIVE_MODE, normalizedMode, `Mode set: ${getModeLabel(normalizedMode)}.`);
   if (!didSave) {
     currentActiveMode = previousMode;
     refreshModeHUD();
-    return;
+    return; // saveSetting already set an error status
   }
 
+  // If the plugin is off, save was still valuable (persists the preference) but
+  // we shouldn't try to apply quality — tell the user explicitly.
   if (!isPluginEnabled) {
     setStatus(STATUS_TYPES.SUCCESS, 'Mode saved. Plugin logic is disabled, so no player changes were applied.', 1400);
     return;
   }
 
+  // Apply the mode's target quality immediately after switching.
   const { lowValue, highValue } = readModeResolutions();
   const targetQuality = normalizedMode === MODE_VALUES.LOW ? lowValue : highValue;
   launchActionWithStatus(craftQualityRequest(targetQuality), `Applying ${targetQuality} for ${getModeLabel(normalizedMode)}...`);

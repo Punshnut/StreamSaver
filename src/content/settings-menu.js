@@ -1,3 +1,35 @@
+/**
+ * content/settings-menu.js
+ *
+ * Opens the Twitch player settings overlay and validates its contents before
+ * the quality submenu can be accessed.
+ *
+ * deploySettingsPanel()
+ *   Main entry point used by quality-menu.js. Full open-and-validate sequence:
+ *     1. Bail if player root is missing.
+ *     2. If settings are already open and valid, return immediately.
+ *     3. If an invalid pre-existing menu is detected, attempt Escape-close first.
+ *     4. Loop up to 3 times:
+ *          a. Wake player controls (hover events to reveal the gear button).
+ *          b. Hunt settings trigger candidates via player.js helpers.
+ *          c. Click the best candidate.
+ *          d. Accept via fallback signal (aria-expanded=true + nearby quality panel)
+ *             or wait for a newly visible menu that validates as player settings.
+ *
+ * findOpenPlayerSettingsMenu(playerRoot)
+ *   Inspects all visible menu roots and scores them against the player settings
+ *   heuristic. Returns ok=true only when exactly one top-level menu passes.
+ *
+ * isLikelyPlayerSettingsMenu(menuRoot, playerRoot)
+ *   Determines whether a given DOM element looks like Twitch's player settings
+ *   overlay. Combines proximity geometry, ARIA role, and semantic text matching.
+ *   Includes a Firefox zero-rect fallback for the filter:opacity edge case.
+ *
+ * getVisibleMenuEntryTexts(menuRoot)
+ *   Returns deduplicated visible label text from a menu root. Falls back to
+ *   plain text line parsing for menu variants without button/menuitem children.
+ */
+
 import { SETTINGS_MENU_LABEL_GROUPS, SETTINGS_MENU_CLOSE_TERMS } from './constants.js';
 import { debug, createResult, isElementVisible, isMenuEntryUsable, getMenuEntryText, wait, stealthClick, awaitSignal } from './utils.js';
 import { serializeRect, isRectInside, isRectNear } from './geometry.js';
@@ -73,9 +105,8 @@ export function isLikelyPlayerSettingsMenu(menuRoot, playerRoot) {
 
   const playerRect = playerRoot.getBoundingClientRect();
   const menuRect = menuRoot.getBoundingClientRect();
-  // Firefox: filter:opacity(0) from the menu hider causes getBoundingClientRect to return 0×0
-  // for layout-present elements. When that happens, skip the proximity check and fall back
-  // to semantic content matching only.
+  // filter:opacity(0) BCR bug: a 0×0 BCR with non-zero offsetWidth means the rect is unreliable.
+  // When detected, skip geometry proximity and fall back to semantic text matching only.
   const menuRectFiltered = menuRect.width === 0 && menuRect.height === 0 && menuRoot.offsetWidth > 0;
   const nearPlayer = menuRectFiltered ? false : isRectNear(playerRect, menuRect, 48);
   const entryTexts = getVisibleMenuEntryTexts(menuRoot);
@@ -261,7 +292,7 @@ export async function deploySettingsPanel() {
   }
   if ((preExistingMenuResult.details?.menuCount || 0) > 0) {
     debug('deploySettingsPanel: invalid pre-existing menu found, trying escape-only close first', preExistingMenuResult.details);
-    const closePreExistingResult = await closeMenusIfNeeded({ allowBodyClick: false, maxAttempts: 1 });
+    const closePreExistingResult = await sweepMenus({ allowBodyClick: false, maxAttempts: 1 });
     const postCloseMenuResult = findOpenPlayerSettingsMenu(playerRoot);
     debug('deploySettingsPanel: post-close pre-existing menu check', {
       closePreExistingResult,

@@ -1,3 +1,32 @@
+/**
+ * content/menu-close.js
+ *
+ * Strategies for dismissing Twitch player menus after automation completes.
+ * The extension must leave the UI in a clean state — no dangling overlays
+ * should be visible to the user after quality switching.
+ *
+ * sweepMenus(options)
+ *   Main entry point. Tries closing strategies in escalating order until all
+ *   visible menus are gone or maxAttempts is exhausted:
+ *     1. Escape key dispatched to activeElement, document.body, document, window
+ *     2. (aggressiveBodyClicks) retreatFromQualityPanel() — navigate Back if
+ *        the quality submenu is still open
+ *     3. (aggressiveBodyClicks) strikeMenuCloseButton() — click a visible
+ *        "Close / Schließen" button
+ *     4. (aggressiveBodyClicks) strikeSettingsToggle() — click the gear button
+ *        whose aria-expanded is 'true' to collapse the settings panel
+ *     5. (aggressiveBodyClicks) hover + settings toggle retry — reveal controls
+ *        first so the gear button becomes visible, then try step 4 again
+ *     6. (allowBodyClick) outside click on the player area — last resort;
+ *        guarded against ads, links, buttons, and fullscreen mode
+ *
+ * strikeMenuCloseButton()   — finds and clicks a visible close entry in menus
+ * strikeSettingsToggle()    — clicks the expanded gear button to collapse menus
+ * retreatFromQualityPanel() — clicks the Back button inside the quality submenu
+ * analyzeMenuForQualitySubmenu() — heuristic to distinguish quality submenus
+ *                                  from the parent settings overlay
+ */
+
 import { SETTINGS_MENU_CLOSE_TERMS, SETTINGS_MENU_BACK_TERMS, SETTINGS_MENU_LABEL_GROUPS, QUALITY_SET, SELECTORS } from './constants.js';
 import { debug, createResult, isElementVisible, isMenuEntryUsable, getMenuEntryText, getVisibleText, wait, stealthClick, awaitSignal, jitter } from './utils.js';
 import { serializeRect } from './geometry.js';

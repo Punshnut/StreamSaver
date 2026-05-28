@@ -1,3 +1,27 @@
+/**
+ * content/quality-menu.js
+ *
+ * All logic for reading and navigating the Twitch quality submenu. This module
+ * does not click quality options itself — that is handled by quality-apply.js.
+ *
+ * deployQualityPanel()     — opens settings, finds and clicks the quality row,
+ *                            waits for quality options to render
+ * scanQualityOptions()     — collects all visible quality menu entries and scores
+ *                            each one for "is this the currently selected option"
+ * readActiveQuality()      — infers which quality is selected from scan results
+ * aimQualityOption()       — finds the best matching entry for a target quality
+ * snapQualityToRange()     — boundary fallback when the target is outside the
+ *                            range of available options (e.g. stream max is 720p
+ *                            but user requested 1080p → pick 720p instead)
+ * probeOptionState()       — weighted signal collector for selection detection
+ *                            (aria-checked, aria-selected, checked inputs, etc.)
+ * findQualityMenuEntry()   — locates the "Quality / Qualität" row inside the
+ *                            currently open settings overlay
+ * rankQualityTiers()       — deduplicates and sorts available quality labels
+ * canProceedAfterSettingsResult() — whether automation can continue after a
+ *                            partially-successful settings open
+ */
+
 import { QUALITY_SET, QUALITY_ORDER_MAP } from './constants.js';
 import { debug, createResult, isMenuEntryUsable, getMenuEntryText, wait, stealthClick, awaitSignal } from './utils.js';
 import { serializeRect } from './geometry.js';
@@ -142,18 +166,39 @@ export function snapQualityToRange(targetQuality, options) {
   });
 }
 
-/** Collects practical selection indicators from one quality menu option element. */
+/**
+ * Collects practical selection indicators from one quality menu option element.
+ *
+ * Signal weights reflect how authoritatively each attribute expresses "selected":
+ *   8 — aria-checked / aria-selected / checked-input: W3C ARIA spec defines these as the
+ *       canonical way to communicate checked/selected state on interactive elements. Twitch
+ *       setting these is an explicit semantic declaration we can trust unconditionally.
+ *   5 — aria-current: valid selection indicator, but also used for navigation context (e.g.
+ *       "current page" in breadcrumbs), so it's strong but not authoritative on its own.
+ *   4 — visible checkmark icon: reliable if present, but depends on CSS not hiding it and
+ *       on Twitch's SVG/icon implementation — visual-only, no semantic guarantee.
+ *   3 — active/selected/checked CSS class or data-state: heuristic based on Twitch's internal
+ *       class names. Not standardized, can change with a UI update.
+ *   2 — "current"/"aktuell"/"selected" in the label text: the weakest hint — Twitch sometimes
+ *       appends "(current)" to the selected option as a plain-text cue.
+ *
+ * Confidence levels:
+ *   'high'   — a strong positive (weight 8) with no contradicting strong negative.
+ *   'medium' — score ≥ 7 with no strong negative (e.g. aria-current=5 + checkmark=4,
+ *              or two mid-weight signals). Threshold of 7 requires at least two
+ *              independent positive signals — one alone isn't enough.
+ *   'low'    — anything below 7, or contradicting strong signals (both aria-checked=true
+ *              and aria-checked=false present, indicating broken/conflicting markup).
+ */
 export function probeOptionState(entry, label) {
   const positiveSignals = [];
   const negativeSignals = [];
   let score = 0;
 
-  // Use weighted signals to resolve conflicting selection indicators.
   const addPositive = (signal, weight) => {
     positiveSignals.push(signal);
     score += weight;
   };
-  // Negative signals lower confidence for this option.
   const addNegative = (signal, weight) => {
     negativeSignals.push(signal);
     score -= weight;
@@ -605,9 +650,11 @@ export async function deployQualityPanel() {
     });
   }
 
-  // Small stability window: Firefox renders quality rows slower than Chrome.
-  // Waiting briefly after the first options appear gives remaining rows time to render
-  // before the caller begins matching, reducing reliance on the pre-fallback retry.
+  // Twitch renders the first quality row immediately when the submenu opens, then appends
+  // remaining rows (lower bitrates) in a deferred React flush. Without this pause,
+  // scanQualityOptions() often sees only the top 1–2 rows, and the 5-attempt retry loop
+  // inside engageQuality() would have to absorb the wait instead — adding unpredictable
+  // latency there. 150 ms is empirically tuned to cover the flush on both Chrome and Firefox.
   await wait(150);
 
   const optionsResult = optionsWaitResult.details.value;

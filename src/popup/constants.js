@@ -1,3 +1,23 @@
+/**
+ * popup/constants.js
+ *
+ * All compile-time constants for the popup UI.
+ * Re-exports quality and mode sets from shared/constants.js so popup modules
+ * only need to import from one place.
+ *
+ * Defines:
+ *   MODE_LABELS        — human-readable display strings for each mode key
+ *   ACTION_NAMES       — message action identifiers sent to the content script
+ *   STATUS_TYPES       — CSS state strings for the status bar (loading/success/error)
+ *   SETTINGS_KEYS      — chrome.storage.local key names
+ *   DEFAULT_SETTINGS   — default values used when storage is empty or corrupt
+ *   Status messages    — fixed strings displayed in the popup status bar
+ *   POPUP_TIMINGS      — timing constants for auto-resetting status messages
+ *   isTwitchUrl()      — URL pattern check for any twitch.tv page
+ *   isInjectableTwitchUrl() — narrower check for www.twitch.tv where the
+ *                             content script is actually injected
+ */
+
 export { QUALITY_VALUES, QUALITY_SET, MODE_VALUES, MODE_SET, resolveQuality } from '../shared/constants.js';
 import { MODE_VALUES } from '../shared/constants.js';
 
