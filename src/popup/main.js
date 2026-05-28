@@ -1,9 +1,9 @@
 import { SETTINGS_KEYS, MODE_VALUES, DEFAULT_SETTINGS } from './constants.js';
 import { qualityButtons, modeLowButton, modeHighButton, pluginEnabledToggle, quickResolutionToggle, fastToggleLow, fastToggleHigh, isPluginEnabled, isQuickResolutionVisible, setQuickResolutionVisibility, setPluginEnabledState } from './ui.js';
-import { syncModeButtonsState, handleQualityButtonClick, handleModeButtonClick, getModeLabel, readModeResolutions, currentActiveMode, sanitizeModeValue, sanitizeQualityValue, isSupportedQuality } from './mode-quality.js';
-import { runActionWithStatus, buildSetQualityRequest } from './messaging.js';
+import { refreshModeHUD, handleQualityButtonClick, handleModeButtonClick, getModeLabel, readModeResolutions, currentActiveMode, sanitizeModeValue, sanitizeQualityValue, isSupportedQuality } from './mode-quality.js';
+import { launchActionWithStatus, craftQualityRequest } from './messaging.js';
 import { loadSettings, saveSetting, handleSelectChange } from './settings.js';
-import { refreshIdleStatus } from './idle-status.js';
+import { probeIdleStatus } from './idle-status.js';
 
 console.log('[StreamSaver][popup] Popup loaded');
 
@@ -28,7 +28,7 @@ fastToggleLow.addEventListener('change', () => {
   handleSelectChange(SETTINGS_KEYS.LOW, fastToggleLow);
   if (currentActiveMode === MODE_VALUES.LOW) {
     const quality = sanitizeQualityValue(fastToggleLow.value, DEFAULT_SETTINGS[SETTINGS_KEYS.LOW]);
-    runActionWithStatus(buildSetQualityRequest(quality), `Applying ${quality}...`);
+    launchActionWithStatus(craftQualityRequest(quality), `Applying ${quality}...`);
   }
 });
 
@@ -36,7 +36,7 @@ fastToggleHigh.addEventListener('change', () => {
   handleSelectChange(SETTINGS_KEYS.HIGH, fastToggleHigh);
   if (currentActiveMode === MODE_VALUES.HIGH) {
     const quality = sanitizeQualityValue(fastToggleHigh.value, DEFAULT_SETTINGS[SETTINGS_KEYS.HIGH]);
-    runActionWithStatus(buildSetQualityRequest(quality), `Applying ${quality}...`);
+    launchActionWithStatus(craftQualityRequest(quality), `Applying ${quality}...`);
   }
 });
 
@@ -57,7 +57,7 @@ if (pluginEnabledToggle instanceof HTMLInputElement) {
       return;
     }
 
-    await refreshIdleStatus(false);
+    await probeIdleStatus(false);
 
     if (!nextEnabled) {
       return;
@@ -66,7 +66,7 @@ if (pluginEnabledToggle instanceof HTMLInputElement) {
     const { lowValue, highValue } = readModeResolutions();
     const activeMode = sanitizeModeValue(currentActiveMode, MODE_VALUES.HIGH);
     const targetQuality = activeMode === MODE_VALUES.LOW ? lowValue : highValue;
-    runActionWithStatus(buildSetQualityRequest(targetQuality), `Applying ${targetQuality} for ${getModeLabel(activeMode)}...`);
+    launchActionWithStatus(craftQualityRequest(targetQuality), `Applying ${targetQuality} for ${getModeLabel(activeMode)}...`);
   });
 }
 
@@ -83,7 +83,7 @@ if (quickResolutionToggle instanceof HTMLInputElement) {
 }
 
 bindActionHandlers();
-syncModeButtonsState();
+refreshModeHUD();
 setPluginEnabledState(isPluginEnabled);
 setQuickResolutionVisibility(isQuickResolutionVisible);
 loadSettings();

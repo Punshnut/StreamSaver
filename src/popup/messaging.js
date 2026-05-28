@@ -1,10 +1,6 @@
-import { ACTION_NAMES, STATUS_TYPES, UNSUPPORTED_TWITCH_HOST_STATUS_MESSAGE, OPEN_TWITCH_STREAM_STATUS_MESSAGE, RELOAD_TWITCH_TAB_STATUS_MESSAGE, QUALITY_SET } from './constants.js';
-import { isPluginEnabled, setStatus, beginAction, endAction, idleStatusType, idleStatusMessage } from './ui.js';
-
-/** Accepts only supported quality values and falls back otherwise. (Local copy to avoid circular dep with mode-quality.js) */
-function sanitizeQualityValue(value, fallback) {
-  return QUALITY_SET.has(value) ? value : fallback;
-}
+import { ACTION_NAMES, STATUS_TYPES, UNSUPPORTED_TWITCH_HOST_STATUS_MESSAGE, OPEN_TWITCH_STREAM_STATUS_MESSAGE, RELOAD_TWITCH_TAB_STATUS_MESSAGE, POPUP_TIMINGS, isTwitchUrl, isInjectableTwitchUrl } from './constants.js';
+import { resolveQuality } from '../shared/constants.js';
+import { isPluginEnabled, setStatus, lockControls, releaseControls, idleStatusType, idleStatusMessage } from './ui.js';
 
 /** Reads the currently focused browser tab in the current window. */
 export function getActiveTab() {
@@ -45,7 +41,7 @@ export function sendMessageToTab(tabId, message) {
 }
 
 /** Maps low-level extension transport errors to user-facing messages. */
-export function mapDispatchErrorToUserMessage(errorMessage) {
+export function decodeDispatchError(errorMessage) {
   const normalized = String(errorMessage || '').toLowerCase();
 
   if (normalized.includes('active tab is not a supported twitch host')) {
@@ -75,16 +71,6 @@ export function mapDispatchErrorToUserMessage(errorMessage) {
   return `Request failed: ${errorMessage}`;
 }
 
-/** True when a URL points to any Twitch page/subdomain. */
-function isTwitchUrl(url) {
-  return typeof url === 'string' && /^https:\/\/([a-z0-9-]+\.)?twitch\.tv\//i.test(url);
-}
-
-/** True when URL matches the host where this extension injects content scripts. */
-function isInjectableTwitchUrl(url) {
-  return typeof url === 'string' && /^https:\/\/www\.twitch\.tv\//i.test(url);
-}
-
 /** Dispatches one message to the active Twitch tab only. */
 export async function dispatchToActiveTab(message) {
   const activeTab = await getActiveTab();
@@ -111,10 +97,10 @@ export function isStructuredActionResponse(response, expectedAction) {
 }
 
 /** Builds a concise popup success label from structured response details. */
-export function buildSuccessStatusMessage(request, response) {
+export function craftSuccessLabel(request, response) {
   const details = response && typeof response.details === 'object' ? response.details : {};
-  const requestedQuality = sanitizeQualityValue(details.requestedQuality, '');
-  const appliedQuality = sanitizeQualityValue(details.appliedQuality || details.targetQuality, '');
+  const requestedQuality = resolveQuality(details.requestedQuality, '');
+  const appliedQuality = resolveQuality(details.appliedQuality || details.targetQuality, '');
   const adjustment = details && typeof details.resolutionAdjustment === 'object' ? details.resolutionAdjustment : null;
   const direction = adjustment && adjustment.direction === 'up' ? 'up' : adjustment && adjustment.direction === 'down' ? 'down' : '';
 
@@ -129,7 +115,7 @@ export function buildSuccessStatusMessage(request, response) {
   }
 
   if (request.action === ACTION_NAMES.SET_QUALITY) {
-    const targetQuality = sanitizeQualityValue(details.appliedQuality || details.targetQuality, '');
+    const targetQuality = resolveQuality(details.appliedQuality || details.targetQuality, '');
     if (targetQuality) {
       return `Applied ${targetQuality}.`;
     }
@@ -139,13 +125,13 @@ export function buildSuccessStatusMessage(request, response) {
 }
 
 /** Runs one action and updates popup status. */
-export async function runActionWithStatus(request, loadingMessage) {
+export async function launchActionWithStatus(request, loadingMessage) {
   if (!isPluginEnabled) {
     setStatus(STATUS_TYPES.ERROR, 'Plugin logic is disabled. Turn it on to apply quality changes.');
     return;
   }
 
-  if (!beginAction(loadingMessage)) {
+  if (!lockControls(loadingMessage)) {
     return;
   }
 
@@ -163,17 +149,17 @@ export async function runActionWithStatus(request, loadingMessage) {
       return;
     }
 
-    setStatus(STATUS_TYPES.SUCCESS, buildSuccessStatusMessage(request, response), 1500);
+    setStatus(STATUS_TYPES.SUCCESS, craftSuccessLabel(request, response), POPUP_TIMINGS.STATUS_SUCCESS_RESET_MS);
   } catch (error) {
     console.error('[StreamSaver][popup] Message dispatch failed:', error);
-    setStatus(STATUS_TYPES.ERROR, mapDispatchErrorToUserMessage(error.message));
+    setStatus(STATUS_TYPES.ERROR, decodeDispatchError(error.message));
   } finally {
-    endAction();
+    releaseControls();
   }
 }
 
 /** Creates the normalized payload used for direct quality-set actions. */
-export function buildSetQualityRequest(quality) {
+export function craftQualityRequest(quality) {
   return {
     action: ACTION_NAMES.SET_QUALITY,
     targetQuality: quality

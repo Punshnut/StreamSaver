@@ -1,7 +1,7 @@
 import { SETTINGS_KEYS, DEFAULT_SETTINGS, STATUS_TYPES } from './constants.js';
-import { setActionButtonsDisabled, setStatus, isActionInFlight, setQuickResolutionVisibility, setPluginEnabledState, fastToggleLow, fastToggleHigh } from './ui.js';
-import { sanitizeQualityValue, sanitizeModeValue, syncModeButtonsState, setCurrentActiveMode } from './mode-quality.js';
-import { refreshIdleStatus } from './idle-status.js';
+import { setActionButtonsDisabled, setStatus, isRoundActive, setQuickResolutionVisibility, setPluginEnabledState, fastToggleLow, fastToggleHigh } from './ui.js';
+import { sanitizeQualityValue, sanitizeModeValue, refreshModeHUD, setCurrentActiveMode } from './mode-quality.js';
+import { probeIdleStatus } from './idle-status.js';
 
 /** Persists one settings key immediately in local extension storage. */
 export async function saveSetting(key, value, successMessage = '') {
@@ -49,7 +49,7 @@ export async function loadSettings() {
     setCurrentActiveMode(activeMode);
     setQuickResolutionVisibility(quickResolutionVisible);
     setPluginEnabledState(pluginEnabled);
-    syncModeButtonsState();
+    refreshModeHUD();
 
     console.log('[StreamSaver][popup] Settings loaded:', {
       lowValue,
@@ -58,7 +58,7 @@ export async function loadSettings() {
       quickResolutionVisible,
       pluginEnabled
     });
-    await refreshIdleStatus(true);
+    await probeIdleStatus(true);
   } catch (error) {
     console.error('[StreamSaver][popup] Failed to load settings:', error);
     fastToggleLow.value = DEFAULT_SETTINGS[SETTINGS_KEYS.LOW];
@@ -66,12 +66,12 @@ export async function loadSettings() {
     setCurrentActiveMode(DEFAULT_SETTINGS[SETTINGS_KEYS.ACTIVE_MODE]);
     setQuickResolutionVisibility(DEFAULT_SETTINGS[SETTINGS_KEYS.QUICK_RESOLUTION_VISIBLE]);
     setPluginEnabledState(DEFAULT_SETTINGS[SETTINGS_KEYS.PLUGIN_ENABLED]);
-    syncModeButtonsState();
+    refreshModeHUD();
     setStatus(STATUS_TYPES.ERROR, 'Failed to load settings. Using defaults.');
   } finally {
-    if (!isActionInFlight) {
+    if (!isRoundActive) {
       setActionButtonsDisabled(false);
     }
-    syncModeButtonsState();
+    refreshModeHUD();
   }
 }

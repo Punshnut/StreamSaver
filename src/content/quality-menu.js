@@ -1,9 +1,9 @@
 import { QUALITY_SET, QUALITY_ORDER_MAP } from './constants.js';
-import { debug, createResult, isMenuEntryUsable, getMenuEntryText, wait, clickElementSafely, waitForCondition } from './utils.js';
+import { debug, createResult, isMenuEntryUsable, getMenuEntryText, wait, stealthClick, awaitSignal } from './utils.js';
 import { serializeRect } from './geometry.js';
-import { findVisibleMenuRoots, findSettingsMenuRootsByText } from './menu-find.js';
-import { normalizeQualityLabel, extractResolutionQuality, labelHasSourceAlias, inferSourceAliasTargets, qualityLabelMatchesTarget, analyzeQualityEntryText } from './quality-matching.js';
-import { openSettingsMenu } from './settings-menu.js';
+import { scanMenuRoots, findSettingsMenuRootsByText } from './menu-find.js';
+import { parseQualityTag, extractResolutionQuality, labelHasSourceAlias, inferSourceAliasTargets, qualityLabelMatchesTarget, analyzeQualityEntryText } from './quality-matching.js';
+import { deploySettingsPanel } from './settings-menu.js';
 
 /** Keeps option diagnostics compact before shipping them through extension messaging. */
 export function compactSelectionPreview(option) {
@@ -51,10 +51,10 @@ export function parseNumericQualityValue(quality) {
 }
 
 /** Deduplicates and sorts visible quality levels from low to high. */
-export function collectSortedAvailableQualityLevels(options) {
+export function rankQualityTiers(options) {
   const available = new Set();
   for (const option of Array.isArray(options) ? options : []) {
-    const normalized = normalizeQualityLabel(option?.normalized || option?.label || '');
+    const normalized = parseQualityTag(option?.normalized || option?.label || '');
     if (QUALITY_SET.has(normalized)) {
       available.add(normalized);
     }
@@ -70,15 +70,15 @@ export function collectSortedAvailableQualityLevels(options) {
 }
 
 /** Resolves boundary fallback when requested quality is outside available range. */
-export function resolveOutOfRangeQualityTarget(targetQuality, options) {
-  const normalizedTarget = normalizeQualityLabel(targetQuality);
+export function snapQualityToRange(targetQuality, options) {
+  const normalizedTarget = parseQualityTag(targetQuality);
   if (!normalizedTarget) {
     return createResult(false, 'INVALID_TARGET_QUALITY', 'Target quality is not recognized.', {
       targetQuality
     });
   }
 
-  const availableQualities = collectSortedAvailableQualityLevels(options);
+  const availableQualities = rankQualityTiers(options);
   if (availableQualities.length === 0) {
     return createResult(false, 'NO_QUALITY_OPTIONS', 'No quality options are available for fallback resolution.', {
       requestedQuality: normalizedTarget
@@ -143,7 +143,7 @@ export function resolveOutOfRangeQualityTarget(targetQuality, options) {
 }
 
 /** Collects practical selection indicators from one quality menu option element. */
-export function analyzeQualityOptionSelectionState(entry, label) {
+export function probeOptionState(entry, label) {
   const positiveSignals = [];
   const negativeSignals = [];
   let score = 0;
@@ -254,8 +254,8 @@ export function analyzeQualityOptionSelectionState(entry, label) {
 }
 
 /** Captures visible quality options and marks which one appears selected. */
-export function collectVisibleQualityOptions() {
-  const menuRoots = findVisibleMenuRoots();
+export function scanQualityOptions() {
+  const menuRoots = scanMenuRoots();
   if (menuRoots.length === 0) {
     return createResult(false, 'MENU_NOT_VISIBLE', 'No visible menu to collect quality options from.');
   }
@@ -274,13 +274,13 @@ export function collectVisibleQualityOptions() {
         continue;
       }
 
-      const normalized = normalizeQualityLabel(label);
+      const normalized = parseQualityTag(label);
       if (!normalized) {
         continue;
       }
 
       const key = `${normalized}:${label.toLowerCase()}`;
-      const selectionState = analyzeQualityOptionSelectionState(entry, label);
+      const selectionState = probeOptionState(entry, label);
       const option = {
         element: entry,
         label,
@@ -315,7 +315,7 @@ export function collectVisibleQualityOptions() {
     return createResult(false, 'NO_QUALITY_OPTIONS', 'No visible quality options were detected.');
   }
 
-  debug('collectVisibleQualityOptions: parsed options', options.map((option) => compactSelectionPreview(option)));
+  debug('scanQualityOptions: parsed options', options.map((option) => compactSelectionPreview(option)));
 
   return createResult(true, 'QUALITY_OPTIONS_COLLECTED', 'Collected visible quality options.', {
     options
@@ -323,10 +323,10 @@ export function collectVisibleQualityOptions() {
 }
 
 /** Infers selected quality from option state, else unknown. */
-export function detectCurrentSelectedQuality(existingOptions = null) {
+export function readActiveQuality(existingOptions = null) {
   let options = existingOptions;
   if (!Array.isArray(options)) {
-    const optionsResult = collectVisibleQualityOptions();
+    const optionsResult = scanQualityOptions();
     if (!optionsResult.ok) {
       return createResult(false, optionsResult.code, optionsResult.message, {
         quality: 'unknown',
@@ -343,7 +343,7 @@ export function detectCurrentSelectedQuality(existingOptions = null) {
 
   if (selectedCandidates.length === 1) {
     const selected = selectedCandidates[0];
-    debug('detectCurrentSelectedQuality: inferred from single selected candidate', compactSelectionPreview(selected));
+    debug('readActiveQuality: inferred from single selected candidate', compactSelectionPreview(selected));
     return createResult(true, 'CURRENT_QUALITY_DETECTED', `Detected current quality: ${selected.normalized}.`, {
       quality: selected.normalized,
       method: selected.selectedConfidence === 'high' ? 'selection-signals-high' : 'selection-signals-medium',
@@ -358,7 +358,7 @@ export function detectCurrentSelectedQuality(existingOptions = null) {
     const topLead = top.selectedScore - runnerUp.selectedScore;
 
     if (top.selectedConfidence === 'high' && topLead >= 4) {
-      debug('detectCurrentSelectedQuality: multiple selected candidates; top candidate chosen by score lead', {
+      debug('readActiveQuality: multiple selected candidates; top candidate chosen by score lead', {
         top: compactSelectionPreview(top),
         runnerUp: compactSelectionPreview(runnerUp),
         topLead
@@ -373,7 +373,7 @@ export function detectCurrentSelectedQuality(existingOptions = null) {
       });
     }
 
-    debug('detectCurrentSelectedQuality: ambiguous selected candidates', {
+    debug('readActiveQuality: ambiguous selected candidates', {
       selectedCandidates: toSelectionPreviews(selectedCandidates)
     });
     return createUnknownCurrentQualityResult('Current quality is ambiguous in submenu state.', 'multiple-selected-candidates', options, {
@@ -381,7 +381,7 @@ export function detectCurrentSelectedQuality(existingOptions = null) {
     });
   }
 
-  debug('detectCurrentSelectedQuality: no selected indicators found in submenu options', {
+  debug('readActiveQuality: no selected indicators found in submenu options', {
     options: toSelectionPreviews(options)
   });
   return createUnknownCurrentQualityResult(
@@ -392,8 +392,8 @@ export function detectCurrentSelectedQuality(existingOptions = null) {
 }
 
 /** Selects the best strict match for target quality. */
-export function findBestMatchingQualityOption(targetQuality, existingOptions = null, matchOptions = {}) {
-  const normalizedTarget = normalizeQualityLabel(targetQuality);
+export function aimQualityOption(targetQuality, existingOptions = null, matchOptions = {}) {
+  const normalizedTarget = parseQualityTag(targetQuality);
   if (!normalizedTarget) {
     return createResult(false, 'INVALID_TARGET_QUALITY', 'Target quality is not recognized.', {
       targetQuality
@@ -402,7 +402,7 @@ export function findBestMatchingQualityOption(targetQuality, existingOptions = n
 
   let options = existingOptions;
   if (!Array.isArray(options)) {
-    const optionsResult = collectVisibleQualityOptions();
+    const optionsResult = scanQualityOptions();
     if (!optionsResult.ok) {
       return createResult(false, optionsResult.code, optionsResult.message, optionsResult.details);
     }
@@ -455,7 +455,7 @@ export function findBestMatchingQualityOption(targetQuality, existingOptions = n
 
 /** Finds the quality/resolution entry inside the currently open settings menu. */
 export function findQualityMenuEntry() {
-  const menuRoots = findVisibleMenuRoots();
+  const menuRoots = scanMenuRoots();
   const seenRoots = new Set(menuRoots);
   for (const root of findSettingsMenuRootsByText()) {
     if (!seenRoots.has(root)) {
@@ -551,20 +551,20 @@ export function canProceedAfterSettingsResult(settingsResult) {
 }
 
 /** Opens the quality submenu and waits for options. */
-export async function openQualitySubmenu() {
-  debug('openQualitySubmenu: opening settings first');
+export async function deployQualityPanel() {
+  debug('deployQualityPanel: opening settings first');
 
-  const settingsResult = await openSettingsMenu();
+  const settingsResult = await deploySettingsPanel();
   if (!canProceedAfterSettingsResult(settingsResult)) {
     return createResult(false, settingsResult.code, settingsResult.message, settingsResult.details);
   }
   if (!settingsResult.ok) {
-    debug('openQualitySubmenu: proceeding with already-open/ambiguous settings state', settingsResult);
+    debug('deployQualityPanel: proceeding with already-open/ambiguous settings state', settingsResult);
   }
 
   let qualityEntryResult = findQualityMenuEntry();
   if (!qualityEntryResult.ok) {
-    const waitQualityResult = await waitForCondition(() => {
+    const waitQualityResult = await awaitSignal(() => {
       const maybeEntry = findQualityMenuEntry();
       return maybeEntry.ok ? maybeEntry : null;
     }, {
@@ -583,14 +583,14 @@ export async function openQualitySubmenu() {
     qualityEntryResult = waitQualityResult.details.value;
   }
 
-  debug('openQualitySubmenu: clicking quality entry', qualityEntryResult.details.label);
-  const clickResult = clickElementSafely(qualityEntryResult.details.element, { prepare: false });
+  debug('deployQualityPanel: clicking quality entry', qualityEntryResult.details.label);
+  const clickResult = stealthClick(qualityEntryResult.details.element, { prepare: false });
   if (!clickResult.ok) {
     return createResult(false, clickResult.code, 'Failed to click quality entry.', clickResult.details);
   }
 
-  const optionsWaitResult = await waitForCondition(() => {
-    const optionsResult = collectVisibleQualityOptions();
+  const optionsWaitResult = await awaitSignal(() => {
+    const optionsResult = scanQualityOptions();
     return optionsResult.ok ? optionsResult : null;
   }, {
     timeoutMs: 1400,
@@ -611,7 +611,7 @@ export async function openQualitySubmenu() {
   await wait(150);
 
   const optionsResult = optionsWaitResult.details.value;
-  debug('openQualitySubmenu: quality options visible', { count: optionsResult.details.options.length });
+  debug('deployQualityPanel: quality options visible', { count: optionsResult.details.options.length });
 
   return createResult(true, 'QUALITY_SUBMENU_OPEN', 'Quality submenu opened successfully.', {
     qualityEntryLabel: qualityEntryResult.details.label,

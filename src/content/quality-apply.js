@@ -1,19 +1,19 @@
-import { debug, createResult, waitForCondition, wait, clickElementSafely } from './utils.js';
-import { normalizeQualityLabel, inferSourceAliasTargets, qualityLabelMatchesTarget } from './quality-matching.js';
-import { collectVisibleQualityOptions, findBestMatchingQualityOption, resolveOutOfRangeQualityTarget, compactSelectionPreview, openQualitySubmenu } from './quality-menu.js';
-import { findVisibleMenuRoots } from './menu-find.js';
+import { debug, createResult, awaitSignal, wait, stealthClick } from './utils.js';
+import { parseQualityTag, inferSourceAliasTargets, qualityLabelMatchesTarget } from './quality-matching.js';
+import { scanQualityOptions, aimQualityOption, snapQualityToRange, compactSelectionPreview, deployQualityPanel } from './quality-menu.js';
+import { scanMenuRoots } from './menu-find.js';
 
 /** Verifies selection state after clicking a quality option. */
-export async function verifyQualitySelection(targetQuality, matchOptions = {}) {
-  const normalizedTarget = normalizeQualityLabel(targetQuality);
+export async function confirmQualityLock(targetQuality, matchOptions = {}) {
+  const normalizedTarget = parseQualityTag(targetQuality);
   if (!normalizedTarget) {
     return createResult(false, 'INVALID_TARGET_QUALITY', 'Cannot verify unknown target quality.', {
       targetQuality
     });
   }
 
-  const waitResult = await waitForCondition(() => {
-    const optionsResult = collectVisibleQualityOptions();
+  const waitResult = await awaitSignal(() => {
+    const optionsResult = scanQualityOptions();
     if (!optionsResult.ok) {
       return null;
     }
@@ -35,7 +35,7 @@ export async function verifyQualitySelection(targetQuality, matchOptions = {}) {
     });
   }
 
-  const menuState = findVisibleMenuRoots().length;
+  const menuState = scanMenuRoots().length;
   if (menuState === 0) {
     return createResult(true, 'QUALITY_CLICKED_UNCONFIRMED', 'Quality option clicked, but menu closed before selection could be verified.');
   }
@@ -46,16 +46,16 @@ export async function verifyQualitySelection(targetQuality, matchOptions = {}) {
 }
 
 /** Runs a full quality selection attempt in Twitch player menus. */
-export async function attemptSetQuality(targetQuality) {
-  const normalizedTarget = normalizeQualityLabel(targetQuality);
+export async function engageQuality(targetQuality) {
+  const normalizedTarget = parseQualityTag(targetQuality);
   if (!normalizedTarget) {
     return createResult(false, 'INVALID_TARGET_QUALITY', 'Target quality is not recognized.', {
       targetQuality
     });
   }
 
-  debug('attemptSetQuality: opening quality submenu', { normalizedTarget });
-  const openResult = await openQualitySubmenu();
+  debug('engageQuality: opening quality submenu', { normalizedTarget });
+  const openResult = await deployQualityPanel();
   if (!openResult.ok) {
     return createResult(false, openResult.code, openResult.message, { openResult });
   }
@@ -71,8 +71,8 @@ export async function attemptSetQuality(targetQuality) {
   let resolutionAdjustment = null;
 
   for (let attempt = 1; attempt <= 5; attempt += 1) {
-    debug('attemptSetQuality: collecting visible quality options', { attempt });
-    const collected = collectVisibleQualityOptions();
+    debug('engageQuality: collecting visible quality options', { attempt });
+    const collected = scanQualityOptions();
     if (collected.ok) {
       optionsResult = collected;
       const inferredFromCurrentOptions = inferSourceAliasTargets(
@@ -83,14 +83,14 @@ export async function attemptSetQuality(targetQuality) {
         allowSourceAliasForTargets.add(aliasTarget);
       }
 
-      debug('attemptSetQuality: matching target quality', {
+      debug('engageQuality: matching target quality', {
         attempt,
         normalizedTarget: effectiveTargetQuality,
         available: collected.details.options.map((option) => option.label),
         allowSourceAliasForTargets: Array.from(allowSourceAliasForTargets)
       });
 
-      matchResult = findBestMatchingQualityOption(effectiveTargetQuality, collected.details.options, {
+      matchResult = aimQualityOption(effectiveTargetQuality, collected.details.options, {
         allowSourceAliasForTargets
       });
       if (matchResult.ok) {
@@ -115,10 +115,10 @@ export async function attemptSetQuality(targetQuality) {
     // before concluding the target is out of range. On Chrome this path is rarely hit,
     // so the added latency is only paid on the slow/incomplete-render path.
     await wait(600);
-    const lateCollected = collectVisibleQualityOptions();
+    const lateCollected = scanQualityOptions();
     if (lateCollected.ok) {
       optionsResult = lateCollected;
-      const lateMatch = findBestMatchingQualityOption(effectiveTargetQuality, lateCollected.details.options, {
+      const lateMatch = aimQualityOption(effectiveTargetQuality, lateCollected.details.options, {
         allowSourceAliasForTargets
       });
       if (lateMatch.ok) {
@@ -128,7 +128,7 @@ export async function attemptSetQuality(targetQuality) {
   }
 
   if ((!matchResult || !matchResult.ok) && optionsResult.ok) {
-    const fallbackTargetResult = resolveOutOfRangeQualityTarget(normalizedTarget, optionsResult.details.options);
+    const fallbackTargetResult = snapQualityToRange(normalizedTarget, optionsResult.details.options);
     if (fallbackTargetResult.ok) {
       resolutionAdjustment = {
         applied: true,
@@ -140,14 +140,14 @@ export async function attemptSetQuality(targetQuality) {
       };
       effectiveTargetQuality = fallbackTargetResult.details.resolvedQuality;
 
-      debug('attemptSetQuality: strict match failed, applying boundary fallback', {
+      debug('engageQuality: strict match failed, applying boundary fallback', {
         requestedQuality: normalizedTarget,
         adjustedQuality: effectiveTargetQuality,
         direction: fallbackTargetResult.details.direction,
         availableQualities: fallbackTargetResult.details.availableQualities
       });
 
-      matchResult = findBestMatchingQualityOption(effectiveTargetQuality, optionsResult.details.options, {
+      matchResult = aimQualityOption(effectiveTargetQuality, optionsResult.details.options, {
         allowSourceAliasForTargets
       });
     }
@@ -194,12 +194,12 @@ export async function attemptSetQuality(targetQuality) {
     });
   }
 
-  debug('attemptSetQuality: clicking quality option', {
+  debug('engageQuality: clicking quality option', {
     targetQuality: effectiveTargetQuality,
     label: targetOption.label
   });
 
-  const clickResult = clickElementSafely(targetOption.element, { skipVisibilityCheck: true });
+  const clickResult = stealthClick(targetOption.element, { skipVisibilityCheck: true });
   if (!clickResult.ok) {
     return createResult(false, clickResult.code, `Failed to click quality option: ${targetOption.label}.`, {
       targetOption,
@@ -207,8 +207,8 @@ export async function attemptSetQuality(targetQuality) {
     });
   }
 
-  debug('attemptSetQuality: verifying selection state', { normalizedTarget: effectiveTargetQuality });
-  const verifyResult = await verifyQualitySelection(effectiveTargetQuality, { allowSourceAliasForTargets });
+  debug('engageQuality: verifying selection state', { normalizedTarget: effectiveTargetQuality });
+  const verifyResult = await confirmQualityLock(effectiveTargetQuality, { allowSourceAliasForTargets });
   if (!verifyResult.ok) {
     return createResult(false, verifyResult.code, verifyResult.message, {
       requestedQuality: normalizedTarget,

@@ -145,7 +145,7 @@ export function isUserTypingInInput() {
 }
 
 /** Performs a defensive click with pre-checks and safe focus/scroll attempts. */
-export function clickElementSafely(element, options = {}) {
+export function stealthClick(element, options = {}) {
   if (!(element instanceof HTMLElement)) {
     return createResult(false, 'INVALID_ELEMENT', 'Click target is not an HTML element.');
   }
@@ -185,7 +185,7 @@ export function clickElementSafely(element, options = {}) {
 }
 
 /** Waits until a condition succeeds or times out. */
-export async function waitForCondition(fn, options = {}) {
+export async function awaitSignal(fn, options = {}) {
   const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 5000;
   const intervalMs = Number.isFinite(options.intervalMs) ? options.intervalMs : 100;
   const description = typeof options.description === 'string' ? options.description : 'condition';

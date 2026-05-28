@@ -1,7 +1,7 @@
 import { SOURCE_TERMS, AUTO_TERMS, QUALITY_SET, QUALITY_ENTRY_TERMS, RESOLUTION_PATTERN } from './constants.js';
 
 /** Normalizes Twitch quality labels into extension-level quality keys. */
-export function normalizeQualityLabel(label) {
+export function parseQualityTag(label) {
   const raw = String(label || '').replace(/\s+/g, ' ').trim();
   if (!raw) {
     return '';

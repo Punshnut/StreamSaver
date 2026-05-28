@@ -41,24 +41,53 @@ export const DEFAULT_MODE_SETTINGS = {
   [STORAGE_KEYS.ACTIVE_MODE]: MODE_VALUES.HIGH,
   [STORAGE_KEYS.PLUGIN_ENABLED]: true
 };
-export const ENFORCEMENT_COOLDOWN_MS = 6000;
-export const ENFORCEMENT_DEBOUNCE_MS = 600;
-export const ENFORCEMENT_PLAYER_READY_TIMEOUT_MS = 6000;
-export const QUALITY_TRUST_TTL_MS = 25_000; // skip detect+set when quality was recently confirmed
 
-export const enforcementState = {
+// All timing constants in one place — tweak delays here, not scattered across files.
+export const TIMINGS = {
+  SPAWN_DELAY_MS: 900,             // initial enforcement after content script loads
+  WARP_DELAY_MS: 900,              // enforcement after Twitch SPA navigation detected
+  STORAGE_CHANGE_DELAY_MS: 160,    // enforcement after settings change in popup
+  FOCUS_DELAY_MS: 300,             // enforcement after window regains focus
+  VISIBILITY_DELAY_MS: 250,        // enforcement after tab becomes visible
+  AD_CLEAR_DELAY_MS: 800,          // enforcement after ad polling detects ad ended
+  FULLSCREEN_RESTORE_DELAY_MS: 800, // wait for Twitch to settle before re-entering fullscreen
+  FULLSCREEN_EXIT_DELAY_MS: 500,   // enforcement after user intentionally exits fullscreen
+  PAGESHOW_DELAY_MS: 700,          // enforcement on bfcache page restore
+  TYPING_RESUME_DELAY_MS: 1_500,   // retry delay when user is typing in chat
+  ENFORCEMENT_RECENT_WINDOW_MS: 2_000, // msSinceEnforcement threshold for fullscreen-caused-by-us check
+  AD_SCAN_INTERVAL_MS: 2_000,      // how often to scan if an ad has ended
+  URL_WATCH_INTERVAL_MS: 1_000,    // SPA nav detection poll interval
+  ENFORCEMENT_COOLDOWN_MS: 6_000,  // min gap between auto-enforcement runs
+  ENFORCEMENT_DEBOUNCE_MS: 600,    // base debounce for scheduled enforcement
+  PLAYER_READY_TIMEOUT_MS: 6_000,  // max wait for player to appear before aborting
+  QUALITY_TRUST_TTL_MS: 25_000,    // skip detect+set when quality was recently confirmed
+};
+
+// Named re-exports for backwards compatibility with existing imports.
+export const ENFORCEMENT_COOLDOWN_MS = TIMINGS.ENFORCEMENT_COOLDOWN_MS;
+export const ENFORCEMENT_DEBOUNCE_MS = TIMINGS.ENFORCEMENT_DEBOUNCE_MS;
+export const ENFORCEMENT_PLAYER_READY_TIMEOUT_MS = TIMINGS.PLAYER_READY_TIMEOUT_MS;
+export const QUALITY_TRUST_TTL_MS = TIMINGS.QUALITY_TRUST_TTL_MS;
+
+// Shared CSS selector strings used across multiple content modules.
+export const SELECTORS = {
+  MENU_ENTRY: 'button, [role="button"], [role="menuitem"], [role="menuitemradio"], [role="option"]',
+  BUTTON_LIKE: 'button, [role="button"]',
+};
+
+export const missionState = {
   inProgress: false,
   scheduledTimerId: null,
-  lastRunAtMs: 0,
+  lastStrikeAtMs: 0,
   lastRunUrl: '',
-  lastResolvedTargetQuality: '',
+  lockedQuality: '',
   lastConfirmedQualityAtMs: 0, // when quality was last successfully confirmed (detect or set)
   urlWatchTimerId: null,
-  adPollingTimerId: null,      // setInterval handle while waiting for an ad to finish
+  adScanTimerId: null,      // setInterval handle while waiting for an ad to finish
   forcePendingAfterFocus: false // force enforcement was blocked by focus-loss; re-fire on next focus
 };
 
-export const fullscreenState = {
+export const arenaState = {
   userIntended: false,       // user explicitly entered fullscreen
   restorationAttempts: 0,
   restorationInProgress: false

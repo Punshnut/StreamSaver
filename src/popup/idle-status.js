@@ -1,19 +1,10 @@
-import { STATUS_TYPES, READY_STATUS_MESSAGE, DISABLED_STATUS_MESSAGE, OPEN_TWITCH_STREAM_STATUS_MESSAGE, UNSUPPORTED_TWITCH_HOST_STATUS_MESSAGE } from './constants.js';
-import { isPluginEnabled, isActionInFlight, setIdleStatus, setStatus } from './ui.js';
-import { getActiveTab, sendMessageToTab, mapDispatchErrorToUserMessage } from './messaging.js';
-
-/** True when a URL points to any Twitch page/subdomain. */
-export function isTwitchUrl(url) {
-  return typeof url === 'string' && /^https:\/\/([a-z0-9-]+\.)?twitch\.tv\//i.test(url);
-}
-
-/** True when URL matches the host where this extension injects content scripts. */
-export function isInjectableTwitchUrl(url) {
-  return typeof url === 'string' && /^https:\/\/www\.twitch\.tv\//i.test(url);
-}
+import { STATUS_TYPES, READY_STATUS_MESSAGE, DISABLED_STATUS_MESSAGE, OPEN_TWITCH_STREAM_STATUS_MESSAGE, UNSUPPORTED_TWITCH_HOST_STATUS_MESSAGE, isTwitchUrl, isInjectableTwitchUrl } from './constants.js';
+export { isTwitchUrl, isInjectableTwitchUrl };
+import { isPluginEnabled, isRoundActive, setIdleStatus, setStatus } from './ui.js';
+import { getActiveTab, sendMessageToTab, decodeDispatchError } from './messaging.js';
 
 /** Maps content-script probe responses into a contextual idle status. */
-export function mapProbeResponseToIdleStatus(response) {
+export function decodeProbeSignal(response) {
   const message = response && typeof response.message === 'string' ? response.message : '';
   const normalized = message.toLowerCase();
 
@@ -46,7 +37,7 @@ export function mapProbeResponseToIdleStatus(response) {
 }
 
 /** Detects active-tab readiness and updates the popup's idle status message. */
-export async function refreshIdleStatus(showImmediately = true) {
+export async function probeIdleStatus(showImmediately = true) {
   let nextStatus = {
     type: STATUS_TYPES.SUCCESS,
     message: isPluginEnabled ? READY_STATUS_MESSAGE : DISABLED_STATUS_MESSAGE
@@ -54,7 +45,7 @@ export async function refreshIdleStatus(showImmediately = true) {
 
   if (!isPluginEnabled) {
     setIdleStatus(nextStatus.type, nextStatus.message);
-    if (showImmediately && !isActionInFlight) {
+    if (showImmediately && !isRoundActive) {
       setStatus(nextStatus.type, nextStatus.message);
     }
     return nextStatus;
@@ -77,23 +68,23 @@ export async function refreshIdleStatus(showImmediately = true) {
     } else {
       try {
         const probeResponse = await sendMessageToTab(activeTab.id, { action: 'streamsaverPopupProbe' });
-        nextStatus = mapProbeResponseToIdleStatus(probeResponse);
+        nextStatus = decodeProbeSignal(probeResponse);
       } catch (error) {
         nextStatus = {
           type: STATUS_TYPES.ERROR,
-          message: mapDispatchErrorToUserMessage(error.message)
+          message: decodeDispatchError(error.message)
         };
       }
     }
   } catch (error) {
     nextStatus = {
       type: STATUS_TYPES.ERROR,
-      message: mapDispatchErrorToUserMessage(error.message)
+      message: decodeDispatchError(error.message)
     };
   }
 
   setIdleStatus(nextStatus.type, nextStatus.message);
-  if (showImmediately && !isActionInFlight) {
+  if (showImmediately && !isRoundActive) {
     setStatus(nextStatus.type, nextStatus.message);
   }
 

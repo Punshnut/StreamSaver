@@ -1,9 +1,9 @@
 import { SETTINGS_MENU_LABEL_GROUPS, SETTINGS_MENU_CLOSE_TERMS } from './constants.js';
-import { debug, createResult, isElementVisible, isMenuEntryUsable, getMenuEntryText, wait, clickElementSafely, waitForCondition } from './utils.js';
+import { debug, createResult, isElementVisible, isMenuEntryUsable, getMenuEntryText, wait, stealthClick, awaitSignal } from './utils.js';
 import { serializeRect, isRectInside, isRectNear } from './geometry.js';
-import { getPlayerRoot, triggerPlayerHover, findPlayerControlScopes, collectSettingsButtonCandidates } from './player.js';
-import { findVisibleMenuRoots, findSettingsMenuRootsByText, findPlayerNearQualityPanel } from './menu-find.js';
-import { closeMenusIfNeeded } from './menu-close.js';
+import { getPlayerRoot, wakePlayerControls, mapControlZones, huntSettingsTriggers } from './player.js';
+import { scanMenuRoots, findSettingsMenuRootsByText, findPlayerNearQualityPanel } from './menu-find.js';
+import { sweepMenus } from './menu-close.js';
 
 /** Collects visible menu labels with dedupe and fallback parsing. */
 export function getVisibleMenuEntryTexts(menuRoot) {
@@ -139,7 +139,7 @@ export function findOpenPlayerSettingsMenu(playerRoot, options = {}) {
     return createResult(false, 'PLAYER_NOT_FOUND', 'Cannot inspect menus without a visible player root.');
   }
 
-  const menuRoots = findVisibleMenuRoots();
+  const menuRoots = scanMenuRoots();
   const seenRoots = new Set(menuRoots);
   const textFallbackRoots = findSettingsMenuRootsByText();
   for (const root of textFallbackRoots) {
@@ -225,24 +225,24 @@ export function findOpenPlayerSettingsMenu(playerRoot, options = {}) {
 }
 
 /** Opens player settings and waits for the overlay. */
-export async function openSettingsMenu() {
-  debug('openSettingsMenu: locating settings trigger');
+export async function deploySettingsPanel() {
+  debug('deploySettingsPanel: locating settings trigger');
 
   const playerRootResult = getPlayerRoot();
   if (!playerRootResult.ok) {
-    debug('openSettingsMenu: player root not found', playerRootResult);
+    debug('deploySettingsPanel: player root not found', playerRootResult);
     return createResult(false, 'PLAYER_NOT_FOUND', 'Cannot open settings without a visible player.');
   }
 
   const playerRoot = playerRootResult.details.element;
   const playerRect = playerRoot.getBoundingClientRect();
-  debug('openSettingsMenu: player root found', {
+  debug('deploySettingsPanel: player root found', {
     selector: playerRootResult.details.selector,
     rect: serializeRect(playerRect)
   });
 
   const preExistingMenuResult = findOpenPlayerSettingsMenu(playerRoot);
-  debug('openSettingsMenu: settings menu already open check', {
+  debug('deploySettingsPanel: settings menu already open check', {
     alreadyOpen: preExistingMenuResult.ok,
     code: preExistingMenuResult.code,
     menuCount: preExistingMenuResult.details?.menuCount ?? 0,
@@ -260,10 +260,10 @@ export async function openSettingsMenu() {
     });
   }
   if ((preExistingMenuResult.details?.menuCount || 0) > 0) {
-    debug('openSettingsMenu: invalid pre-existing menu found, trying escape-only close first', preExistingMenuResult.details);
+    debug('deploySettingsPanel: invalid pre-existing menu found, trying escape-only close first', preExistingMenuResult.details);
     const closePreExistingResult = await closeMenusIfNeeded({ allowBodyClick: false, maxAttempts: 1 });
     const postCloseMenuResult = findOpenPlayerSettingsMenu(playerRoot);
-    debug('openSettingsMenu: post-close pre-existing menu check', {
+    debug('deploySettingsPanel: post-close pre-existing menu check', {
       closePreExistingResult,
       code: postCloseMenuResult.code,
       menuCount: postCloseMenuResult.details?.menuCount ?? 0,
@@ -281,39 +281,39 @@ export async function openSettingsMenu() {
         closePreExistingResult
       });
     }
-    debug('openSettingsMenu: continuing despite invalid pre-existing menus', {
+    debug('deploySettingsPanel: continuing despite invalid pre-existing menus', {
       closePreExistingResult,
       remainingMenuCount: postCloseMenuResult.details?.menuCount ?? 0
     });
   }
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
-    debug('openSettingsMenu: search attempt', { attempt });
-    triggerPlayerHover(playerRoot);
+    debug('deploySettingsPanel: search attempt', { attempt });
+    wakePlayerControls(playerRoot);
     await wait(120);
 
     const menuStateBeforeClick = findOpenPlayerSettingsMenu(playerRoot);
     if (menuStateBeforeClick.ok) {
-      debug('openSettingsMenu: valid menu appeared before click', menuStateBeforeClick.details);
+      debug('deploySettingsPanel: valid menu appeared before click', menuStateBeforeClick.details);
       return createResult(true, 'SETTINGS_MENU_ALREADY_OPEN', 'Settings menu already open and valid.', {
         menuState: menuStateBeforeClick.details
       });
     }
     if ((menuStateBeforeClick.details?.acceptedCount || 0) > 0) {
-      debug('openSettingsMenu: valid settings menu already open with ambiguous state', menuStateBeforeClick.details);
+      debug('deploySettingsPanel: valid settings menu already open with ambiguous state', menuStateBeforeClick.details);
       return createResult(false, 'SETTINGS_MENU_ALREADY_OPEN_AMBIGUOUS', 'A valid settings menu is already open, but menu state is ambiguous.', {
         menuState: menuStateBeforeClick.details
       });
     }
 
-    const controlScopes = findPlayerControlScopes(playerRoot);
-    debug('openSettingsMenu: control scopes inside player', controlScopes.map((scope) => ({
+    const controlScopes = mapControlZones(playerRoot);
+    debug('deploySettingsPanel: control scopes inside player', controlScopes.map((scope) => ({
       selector: scope.selector,
       rect: scope.rect
     })));
 
-    const candidates = collectSettingsButtonCandidates(playerRoot, controlScopes);
-    debug('openSettingsMenu: candidate buttons', candidates.map((candidate) => ({
+    const candidates = huntSettingsTriggers(playerRoot, controlScopes);
+    debug('deploySettingsPanel: candidate buttons', candidates.map((candidate) => ({
       selector: candidate.selector,
       ariaLabel: candidate.ariaLabel,
       title: candidate.title,
@@ -326,14 +326,14 @@ export async function openSettingsMenu() {
     })));
 
     if (candidates.length === 0) {
-      debug('openSettingsMenu: retry reason - no valid settings candidates found in player controls', { attempt });
+      debug('deploySettingsPanel: retry reason - no valid settings candidates found in player controls', { attempt });
       await wait(140);
       continue;
     }
 
     const candidate = candidates[0];
     if (!isElementVisible(candidate.element)) {
-      debug('openSettingsMenu: selected candidate is no longer visible, skipping attempt', {
+      debug('deploySettingsPanel: selected candidate is no longer visible, skipping attempt', {
         attempt,
         candidate
       });
@@ -342,7 +342,7 @@ export async function openSettingsMenu() {
     }
 
     if (!isRectInside(playerRect, candidate.element.getBoundingClientRect(), 8)) {
-      debug('openSettingsMenu: selected candidate moved outside player bounds, skipping attempt', {
+      debug('deploySettingsPanel: selected candidate moved outside player bounds, skipping attempt', {
         attempt,
         candidate
       });
@@ -350,7 +350,7 @@ export async function openSettingsMenu() {
       continue;
     }
 
-    debug('openSettingsMenu: clicking candidate', {
+    debug('deploySettingsPanel: clicking candidate', {
       attempt,
       selector: candidate.selector,
       matchedBy: candidate.matchedBy,
@@ -360,14 +360,14 @@ export async function openSettingsMenu() {
       rect: candidate.rect
     });
 
-    const safeClickResult = clickElementSafely(candidate.element, { prepare: false });
+    const safeClickResult = stealthClick(candidate.element, { prepare: false });
     if (!safeClickResult.ok) {
-      debug('openSettingsMenu: click candidate failed', safeClickResult);
+      debug('deploySettingsPanel: click candidate failed', safeClickResult);
       await wait(140);
       continue;
     }
 
-    const fallbackWaitResult = await waitForCondition(() => {
+    const fallbackWaitResult = await awaitSignal(() => {
       const ariaExpanded = String(candidate.element?.getAttribute('aria-expanded') || '').toLowerCase() === 'true';
       const panel = findPlayerNearQualityPanel(playerRoot);
       return ariaExpanded && panel ? { ariaExpanded, panel } : null;
@@ -378,7 +378,7 @@ export async function openSettingsMenu() {
     });
 
     if (fallbackWaitResult.ok) {
-      debug('openSettingsMenu: accepted fallback settings signal', fallbackWaitResult.details.value);
+      debug('deploySettingsPanel: accepted fallback settings signal', fallbackWaitResult.details.value);
       return createResult(true, 'SETTINGS_MENU_OPEN_FALLBACK', 'Settings menu opened via fallback signal.', {
         clickedCandidate: {
           selector: candidate.selector,
@@ -390,10 +390,10 @@ export async function openSettingsMenu() {
       });
     }
 
-    const menusBeforeWait = findVisibleMenuRoots();
+    const menusBeforeWait = scanMenuRoots();
     const beforeSet = new Set(menusBeforeWait);
-    const waitResult = await waitForCondition(() => {
-      const menus = findVisibleMenuRoots();
+    const waitResult = await awaitSignal(() => {
+      const menus = scanMenuRoots();
       const hasNewMenuRoot = menus.some((menu) => !beforeSet.has(menu));
       const validated = findOpenPlayerSettingsMenu(playerRoot, { log: false });
       if (validated.ok || hasNewMenuRoot) {
@@ -407,7 +407,7 @@ export async function openSettingsMenu() {
     });
 
     if (!waitResult.ok) {
-      debug('openSettingsMenu: retry reason - click did not open any menu', {
+      debug('deploySettingsPanel: retry reason - click did not open any menu', {
         attempt,
         clickedCandidate: {
           selector: candidate.selector,
@@ -421,7 +421,7 @@ export async function openSettingsMenu() {
 
     const menusAfterClick = waitResult.details.value;
     const menuStateAfterClick = findOpenPlayerSettingsMenu(playerRoot);
-    debug('openSettingsMenu: menus found after click', {
+    debug('deploySettingsPanel: menus found after click', {
       attempt,
       globalMenuCount: menusAfterClick.length,
       menuCount: menuStateAfterClick.details?.menuCount ?? 0,
@@ -430,7 +430,7 @@ export async function openSettingsMenu() {
     });
 
     if (menuStateAfterClick.ok) {
-      debug('openSettingsMenu: accepted player settings menu', menuStateAfterClick.details);
+      debug('deploySettingsPanel: accepted player settings menu', menuStateAfterClick.details);
       return createResult(true, 'SETTINGS_MENU_OPEN', 'Settings menu opened and validated successfully.', {
         clickedCandidate: {
           selector: candidate.selector,
@@ -442,7 +442,7 @@ export async function openSettingsMenu() {
       });
     }
     if ((menuStateAfterClick.details?.acceptedCount || 0) > 0) {
-      debug('openSettingsMenu: valid settings menu detected but not exactly one', menuStateAfterClick.details);
+      debug('deploySettingsPanel: valid settings menu detected but not exactly one', menuStateAfterClick.details);
       return createResult(false, 'SETTINGS_MENU_NOT_EXACTLY_ONE', 'A valid settings menu opened, but not as exactly one visible menu.', {
         clickedCandidate: {
           selector: candidate.selector,
@@ -454,7 +454,7 @@ export async function openSettingsMenu() {
       });
     }
 
-    debug('openSettingsMenu: menu rejected after click', {
+    debug('deploySettingsPanel: menu rejected after click', {
       code: menuStateAfterClick.code,
       reason: menuStateAfterClick.message,
       assessments: menuStateAfterClick.details?.assessments || []

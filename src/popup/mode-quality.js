@@ -1,6 +1,7 @@
 import { QUALITY_SET, MODE_SET, MODE_VALUES, MODE_LABELS, SETTINGS_KEYS, DEFAULT_SETTINGS, STATUS_TYPES } from './constants.js';
-import { isPluginEnabled, setStatus, popupRoot, modeLowButton, modeHighButton, modeSummaryEl, fastToggleLow, fastToggleHigh, setEndActionCallback } from './ui.js';
-import { runActionWithStatus, buildSetQualityRequest } from './messaging.js';
+import { resolveQuality } from '../shared/constants.js';
+import { isPluginEnabled, setStatus, popupRoot, modeLowButton, modeHighButton, modeSummaryEl, fastToggleLow, fastToggleHigh, setReleaseCallback } from './ui.js';
+import { launchActionWithStatus, craftQualityRequest } from './messaging.js';
 import { saveSetting } from './settings.js';
 
 // currentActiveMode lives here because all mode-related logic is in this module.
@@ -11,13 +12,13 @@ export function setCurrentActiveMode(value) {
   currentActiveMode = value;
 }
 
-// Register syncModeButtonsState as the endAction callback to break the circular dep.
-// This runs after the module is evaluated, so syncModeButtonsState is defined by then.
-// We use a deferred registration pattern: call setEndActionCallback here after defining the function.
+// Register refreshModeHUD as the releaseControls callback to break the circular dep.
+// This runs after the module is evaluated, so refreshModeHUD is defined by then.
+// We use a deferred registration pattern: call setReleaseCallback here after defining the function.
 
 /** Accepts only supported quality values and falls back otherwise. */
 export function sanitizeQualityValue(value, fallback) {
-  return QUALITY_SET.has(value) ? value : fallback;
+  return resolveQuality(value, fallback);
 }
 
 /** Normalizes mode values with fallback. */
@@ -44,7 +45,7 @@ export function readModeResolutions() {
 }
 
 /** Updates mode button state and summary text. */
-export function syncModeButtonsState() {
+export function refreshModeHUD() {
   const activeMode = sanitizeModeValue(currentActiveMode, MODE_VALUES.HIGH);
   const lowIsActive = activeMode === MODE_VALUES.LOW;
   const highIsActive = activeMode === MODE_VALUES.HIGH;
@@ -59,8 +60,8 @@ export function syncModeButtonsState() {
   modeSummaryEl.textContent = `Current mode: ${getModeLabel(activeMode)}`;
 }
 
-// Register the callback now that syncModeButtonsState is defined.
-setEndActionCallback(syncModeButtonsState);
+// Register the callback now that refreshModeHUD is defined.
+setReleaseCallback(refreshModeHUD);
 
 /** Handles one quick-resolution button click and dispatches setQuality. */
 export function handleQualityButtonClick(button) {
@@ -72,7 +73,7 @@ export function handleQualityButtonClick(button) {
     return;
   }
 
-  runActionWithStatus(buildSetQualityRequest(quality), `Applying ${quality}...`);
+  launchActionWithStatus(craftQualityRequest(quality), `Applying ${quality}...`);
 }
 
 /** Saves mode change, then applies its target quality. */
@@ -86,11 +87,11 @@ export async function handleModeButtonClick(mode) {
 
   const previousMode = currentActiveMode;
   currentActiveMode = normalizedMode;
-  syncModeButtonsState();
+  refreshModeHUD();
   const didSave = await saveSetting(SETTINGS_KEYS.ACTIVE_MODE, normalizedMode, `Mode set: ${getModeLabel(normalizedMode)}.`);
   if (!didSave) {
     currentActiveMode = previousMode;
-    syncModeButtonsState();
+    refreshModeHUD();
     return;
   }
 
@@ -101,5 +102,5 @@ export async function handleModeButtonClick(mode) {
 
   const { lowValue, highValue } = readModeResolutions();
   const targetQuality = normalizedMode === MODE_VALUES.LOW ? lowValue : highValue;
-  runActionWithStatus(buildSetQualityRequest(targetQuality), `Applying ${targetQuality} for ${getModeLabel(normalizedMode)}...`);
+  launchActionWithStatus(craftQualityRequest(targetQuality), `Applying ${targetQuality} for ${getModeLabel(normalizedMode)}...`);
 }

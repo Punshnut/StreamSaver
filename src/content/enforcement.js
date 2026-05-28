@@ -1,11 +1,11 @@
-import { ENFORCEMENT_COOLDOWN_MS, ENFORCEMENT_DEBOUNCE_MS, QUALITY_TRUST_TTL_MS, enforcementState, MODE_VALUES, ENFORCEMENT_PLAYER_READY_TIMEOUT_MS } from './constants.js';
-import { debug, wait, isUserTypingInInput, createResult, waitForCondition } from './utils.js';
+import { ENFORCEMENT_COOLDOWN_MS, ENFORCEMENT_DEBOUNCE_MS, QUALITY_TRUST_TTL_MS, TIMINGS, missionState, MODE_VALUES, ENFORCEMENT_PLAYER_READY_TIMEOUT_MS } from './constants.js';
+import { debug, wait, isUserTypingInInput, createResult, awaitSignal } from './utils.js';
 import { isSupportedTwitchPage } from './page-support.js';
 import { getPlayerRoot } from './player.js';
-import { isAdCurrentlyPlaying } from './ad-detection.js';
-import { loadPluginEnabledSetting, loadModeSettingsForEnforcement, resolveTargetQualityForMode } from './storage.js';
-import { executeSetQualityAutomation, runQualityRequestExclusive, detectCurrentQualityState } from './automation.js';
-import { closeMenusIfNeeded } from './menu-close.js';
+import { isAdLive } from './ad-detection.js';
+import { loadPluginEnabledSetting, loadModeSettingsForEnforcement, aimQualityForMode } from './storage.js';
+import { runQualityMission, lockQualityRun, scanQualityState } from './automation.js';
+import { sweepMenus } from './menu-close.js';
 import { isBrowserInFullscreen, attemptRestoreTwitchFullscreen } from './fullscreen.js';
 
 /** Bridges page-support classification into structured step results. */
@@ -21,18 +21,18 @@ function getPageSupportState() {
 }
 
 /** Computes remaining cooldown time before the next auto-enforcement run. */
-export function getEnforcementCooldownRemainingMs() {
-  if (!enforcementState.lastRunAtMs) {
+export function strikeCooldownMs() {
+  if (!missionState.lastStrikeAtMs) {
     return 0;
   }
-  return Math.max(0, ENFORCEMENT_COOLDOWN_MS - (Date.now() - enforcementState.lastRunAtMs));
+  return Math.max(0, ENFORCEMENT_COOLDOWN_MS - (Date.now() - missionState.lastStrikeAtMs));
 }
 
 /** Debounces and schedules mode quality enforcement. */
-export function scheduleEnsureDesiredQualityForCurrentMode(triggerReason, options = {}) {
+export function queueEnforcementRound(triggerReason, options = {}) {
   const force = options.force === true;
   const baseDelayMs = Number.isFinite(options.delayMs) ? Math.max(0, Math.floor(options.delayMs)) : ENFORCEMENT_DEBOUNCE_MS;
-  const cooldownRemainingMs = getEnforcementCooldownRemainingMs();
+  const cooldownRemainingMs = strikeCooldownMs();
   const delayMs = force ? baseDelayMs : Math.max(baseDelayMs, cooldownRemainingMs);
 
   if (!force && cooldownRemainingMs > 0) {
@@ -41,20 +41,20 @@ export function scheduleEnsureDesiredQualityForCurrentMode(triggerReason, option
       cooldownRemainingMs
     });
   }
-  if (enforcementState.inProgress) {
+  if (missionState.inProgress) {
     debug('quality enforcement: lock active while scheduling follow-up run', {
       triggerReason
     });
   }
 
-  if (enforcementState.scheduledTimerId) {
-    clearTimeout(enforcementState.scheduledTimerId);
-    enforcementState.scheduledTimerId = null;
+  if (missionState.scheduledTimerId) {
+    clearTimeout(missionState.scheduledTimerId);
+    missionState.scheduledTimerId = null;
   }
 
-  enforcementState.scheduledTimerId = setTimeout(() => {
-    enforcementState.scheduledTimerId = null;
-    ensureDesiredQualityForCurrentMode(triggerReason, { force }).catch((error) => {
+  missionState.scheduledTimerId = setTimeout(() => {
+    missionState.scheduledTimerId = null;
+    runEnforcementRound(triggerReason, { force }).catch((error) => {
       debug('quality enforcement: unhandled ensure error', { triggerReason, error: String(error) });
     });
   }, delayMs);
@@ -67,17 +67,17 @@ export function scheduleEnsureDesiredQualityForCurrentMode(triggerReason, option
 }
 
 /** Keeps player quality aligned with active mode settings. */
-export async function ensureDesiredQualityForCurrentMode(triggerReason = 'unknown', options = {}) {
+export async function runEnforcementRound(triggerReason = 'unknown', options = {}) {
   const force = options.force === true;
 
-  if (enforcementState.inProgress) {
+  if (missionState.inProgress) {
     debug('quality enforcement: skipped because another run is still in progress', {
       triggerReason
     });
     return createResult(false, 'ENFORCEMENT_LOCKED', 'Quality enforcement skipped because another run is still in progress.');
   }
 
-  const cooldownRemainingMs = getEnforcementCooldownRemainingMs();
+  const cooldownRemainingMs = strikeCooldownMs();
   if (!force && cooldownRemainingMs > 0) {
     debug('quality enforcement: skipped due cooldown', {
       triggerReason,
@@ -98,18 +98,18 @@ export async function ensureDesiredQualityForCurrentMode(triggerReason = 'unknow
     // Remember that a force-trigger was blocked so we can replay it as force when
     // focus returns (e.g. popup was open while user changed the resolution setting).
     if (force) {
-      enforcementState.forcePendingAfterFocus = true;
+      missionState.forcePendingAfterFocus = true;
     }
     return createResult(false, 'TAB_NOT_FOCUSED', 'Quality enforcement skipped — tab not visible or window not focused.');
   }
 
   if (isUserTypingInInput()) {
     debug('quality enforcement: skipped because user is typing in a text input', { triggerReason });
-    scheduleEnsureDesiredQualityForCurrentMode('typing-resume', { delayMs: 1500 });
+    queueEnforcementRound('typing-resume', { delayMs: TIMINGS.TYPING_RESUME_DELAY_MS });
     return createResult(false, 'USER_TYPING', 'Quality enforcement skipped — user is typing in a text input.');
   }
 
-  enforcementState.inProgress = true;
+  missionState.inProgress = true;
   debug('quality enforcement: run started', {
     triggerReason,
     force,
@@ -139,7 +139,7 @@ export async function ensureDesiredQualityForCurrentMode(triggerReason = 'unknow
       return createResult(false, 'UNSUPPORTED_PAGE', pageSupport.message, pageSupport.details);
     }
 
-    const playerReadyResult = await waitForCondition(() => getPlayerRoot().ok, {
+    const playerReadyResult = await awaitSignal(() => getPlayerRoot().ok, {
       timeoutMs: ENFORCEMENT_PLAYER_READY_TIMEOUT_MS,
       intervalMs: 250,
       description: 'player ready for quality enforcement'
@@ -168,7 +168,7 @@ export async function ensureDesiredQualityForCurrentMode(triggerReason = 'unknow
 
     debug('quality enforcement: active mode loaded', modeSettingsResult.details);
 
-    const resolvedTarget = resolveTargetQualityForMode(modeSettingsResult.details);
+    const resolvedTarget = aimQualityForMode(modeSettingsResult.details);
     debug('quality enforcement: desired target quality resolved', resolvedTarget);
 
     // Re-check: user may have entered fullscreen during the async setup phase above
@@ -183,49 +183,49 @@ export async function ensureDesiredQualityForCurrentMode(triggerReason = 'unknow
     if (document.visibilityState !== 'visible' || !document.hasFocus()) {
       debug('quality enforcement: aborted before DOM manipulation — tab lost focus during setup', { triggerReason });
       if (force) {
-        enforcementState.forcePendingAfterFocus = true;
+        missionState.forcePendingAfterFocus = true;
       }
       return createResult(false, 'TAB_NOT_FOCUSED', 'Quality enforcement aborted — tab lost focus during setup.');
     }
 
-    if (isAdCurrentlyPlaying()) {
+    if (isAdLive()) {
       debug('quality enforcement: skipped because a Twitch ad is currently playing', { triggerReason });
       // Poll every 2 s so we automatically enforce quality as soon as the ad ends —
       // Twitch often resets to Auto/Source during an ad break.
-      if (!enforcementState.adPollingTimerId) {
-        enforcementState.adPollingTimerId = setInterval(() => {
-          if (isAdCurrentlyPlaying()) return; // still in the ad
-          clearInterval(enforcementState.adPollingTimerId);
-          enforcementState.adPollingTimerId = null;
+      if (!missionState.adScanTimerId) {
+        missionState.adScanTimerId = setInterval(() => {
+          if (isAdLive()) return; // still in the ad
+          clearInterval(missionState.adScanTimerId);
+          missionState.adScanTimerId = null;
           debug('quality enforcement: ad ended — scheduling post-ad enforcement');
-          scheduleEnsureDesiredQualityForCurrentMode('ad-ended', { force: true, delayMs: 800 });
-        }, 2000);
+          queueEnforcementRound('ad-ended', { force: true, delayMs: TIMINGS.AD_CLEAR_DELAY_MS });
+        }, TIMINGS.AD_SCAN_INTERVAL_MS);
       }
       return createResult(false, 'AD_PLAYING', 'Quality enforcement skipped — Twitch ad is playing.');
     }
 
     // Skip detect+set entirely if we recently confirmed this quality on the same URL.
     // Force triggers (storage change, SPA nav, page show) always bypass this.
-    const trustAge = Date.now() - enforcementState.lastConfirmedQualityAtMs;
+    const trustAge = Date.now() - missionState.lastConfirmedQualityAtMs;
     const canSkipDetection = (
       !force &&
-      enforcementState.lastResolvedTargetQuality === resolvedTarget.targetQuality &&
-      enforcementState.lastRunUrl === location.href &&
+      missionState.lockedQuality === resolvedTarget.targetQuality &&
+      missionState.lastRunUrl === location.href &&
       trustAge < QUALITY_TRUST_TTL_MS
     );
     if (canSkipDetection) {
       debug('quality enforcement: skipping detect+set — trusted quality state matches target', {
         triggerReason, trustAgeMs: trustAge, target: resolvedTarget.targetQuality
       });
-      enforcementState.lastRunAtMs = Date.now();
+      missionState.lastStrikeAtMs = Date.now();
       return createResult(true, 'QUALITY_TRUSTED', 'Quality recently confirmed; skipping menu detection.', {
         triggerReason, targetQuality: resolvedTarget.targetQuality, trustAgeMs: trustAge
       });
     }
 
-    const currentQualityResult = await detectCurrentQualityState();
+    const currentQualityResult = await scanQualityState();
 
-    // Re-check: detectCurrentQualityState() opens/closes menus and is async;
+    // Re-check: scanQualityState() opens/closes menus and is async;
     // user may have entered fullscreen during that window.
     if (isBrowserInFullscreen()) {
       debug('quality enforcement: aborted after quality detection — entered fullscreen during detection', { triggerReason });
@@ -248,9 +248,9 @@ export async function ensureDesiredQualityForCurrentMode(triggerReason = 'unknow
         debug('quality enforcement: skipped because current quality already matches target', {
           targetQuality: resolvedTarget.targetQuality
         });
-        enforcementState.lastResolvedTargetQuality = resolvedTarget.targetQuality;
-        enforcementState.lastConfirmedQualityAtMs = Date.now();
-        // Safety net: detectCurrentQualityState opens the quality submenu and closes it,
+        missionState.lockedQuality = resolvedTarget.targetQuality;
+        missionState.lastConfirmedQualityAtMs = Date.now();
+        // Safety net: scanQualityState opens the quality submenu and closes it,
         // but the close can fail when the tab just became visible (e.g. after sleep/wake or
         // tab switch) because escape key events may not be processed reliably at that point.
         // Ensure the menu is closed before returning so the user never sees a stuck-open menu.
@@ -269,8 +269,8 @@ export async function ensureDesiredQualityForCurrentMode(triggerReason = 'unknow
       });
     }
 
-    const automationResponse = await runQualityRequestExclusive('modeEnforce', async () => {
-      return executeSetQualityAutomation(resolvedTarget.targetQuality, pageSupport, 'modeEnforce', {
+    const automationResponse = await lockQualityRun('modeEnforce', async () => {
+      return runQualityMission(resolvedTarget.targetQuality, pageSupport, 'modeEnforce', {
         triggerReason,
         activeMode: resolvedTarget.activeMode,
         fastToggleLow: resolvedTarget.fastToggleLow,
@@ -282,7 +282,7 @@ export async function ensureDesiredQualityForCurrentMode(triggerReason = 'unknow
       debug('quality enforcement: manual/other action lock prevented run, retrying soon', {
         triggerReason
       });
-      scheduleEnsureDesiredQualityForCurrentMode('retry-after-busy', { delayMs: ENFORCEMENT_DEBOUNCE_MS, force: true });
+      queueEnforcementRound('retry-after-busy', { delayMs: ENFORCEMENT_DEBOUNCE_MS, force: true });
       return createResult(false, 'ENFORCEMENT_BUSY', 'Automation busy; queued retry.');
     }
 
@@ -291,8 +291,8 @@ export async function ensureDesiredQualityForCurrentMode(triggerReason = 'unknow
         targetQuality: resolvedTarget.targetQuality,
         resultCode: automationResponse.details?.resultCode
       });
-      enforcementState.lastResolvedTargetQuality = resolvedTarget.targetQuality;
-      enforcementState.lastConfirmedQualityAtMs = Date.now();
+      missionState.lockedQuality = resolvedTarget.targetQuality;
+      missionState.lastConfirmedQualityAtMs = Date.now();
     } else {
       debug('quality enforcement: automation failed', {
         message: automationResponse.message,
@@ -305,8 +305,8 @@ export async function ensureDesiredQualityForCurrentMode(triggerReason = 'unknow
       response: automationResponse
     });
   } finally {
-    enforcementState.inProgress = false;
-    enforcementState.lastRunAtMs = Date.now();
-    enforcementState.lastRunUrl = location.href;
+    missionState.inProgress = false;
+    missionState.lastStrikeAtMs = Date.now();
+    missionState.lastRunUrl = location.href;
   }
 }

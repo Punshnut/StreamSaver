@@ -1,7 +1,7 @@
 import { AD_INDICATOR_SELECTORS } from './constants.js';
 
 /** Returns true when a Twitch ad is currently visible in the player. */
-export function isAdCurrentlyPlaying() {
+export function isAdLive() {
   return AD_INDICATOR_SELECTORS.some((sel) => {
     const el = document.querySelector(sel);
     if (el === null) return false;

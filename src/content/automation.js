@@ -1,11 +1,11 @@
 import { SETTINGS_MENU_DEBUG_MODE } from './constants.js';
 import { debug, createResult, wait } from './utils.js';
-import { makeResponse, validateQuality } from './page-support.js';
-import { isAdCurrentlyPlaying } from './ad-detection.js';
-import { showMenuHider, hideMenuHider } from './menu-hider.js';
-import { attemptSetQuality } from './quality-apply.js';
-import { openQualitySubmenu, detectCurrentSelectedQuality, collectVisibleQualityOptions } from './quality-menu.js';
-import { closeMenusIfNeeded } from './menu-close.js';
+import { forgeResponse, validateQuality } from './page-support.js';
+import { isAdLive } from './ad-detection.js';
+import { deployMenuShield, liftMenuShield } from './menu-hider.js';
+import { engageQuality } from './quality-apply.js';
+import { deployQualityPanel, readActiveQuality, scanQualityOptions } from './quality-menu.js';
+import { sweepMenus } from './menu-close.js';
 import { loadPluginEnabledSetting } from './storage.js';
 import { getPlayerRoot } from './player.js';
 
@@ -13,9 +13,9 @@ import { getPlayerRoot } from './player.js';
 let activeSetQualityRun = null;
 
 /** Serializes quality requests to avoid UI races. */
-export async function runQualityRequestExclusive(action, runFn) {
+export async function lockQualityRun(action, runFn) {
   if (activeSetQualityRun) {
-    return makeResponse(false, action, 'Another settings request is still running. Please retry in a moment.', {
+    return forgeResponse(false, action, 'Another settings request is still running. Please retry in a moment.', {
       code: 'SETQUALITY_BUSY'
     });
   }
@@ -32,13 +32,13 @@ export async function runQualityRequestExclusive(action, runFn) {
 }
 
 /** Executes the existing quality-change automation flow for one target quality. */
-export async function executeSetQualityAutomation(targetQuality, pageSupport, action = 'setQuality', extraDetails = {}) {
+export async function runQualityMission(targetQuality, pageSupport, action = 'setQuality', extraDetails = {}) {
   const normalizedTarget = validateQuality(targetQuality);
   if (!normalizedTarget) {
-    return makeResponse(false, action, 'Invalid target quality.', { targetQuality, ...extraDetails });
+    return forgeResponse(false, action, 'Invalid target quality.', { targetQuality, ...extraDetails });
   }
 
-  debug('executeSetQualityAutomation: request received', {
+  debug('runQualityMission: request received', {
     action,
     normalizedTarget,
     settingsMenuDebugOnly: SETTINGS_MENU_DEBUG_MODE
@@ -46,7 +46,7 @@ export async function executeSetQualityAutomation(targetQuality, pageSupport, ac
 
   const playerRootResult = getPlayerRoot();
   if (!playerRootResult.ok) {
-    return makeResponse(false, action, 'No Twitch player found on this page.', {
+    return forgeResponse(false, action, 'No Twitch player found on this page.', {
       targetQuality: normalizedTarget,
       step: playerRootResult,
       pageSupport,
@@ -54,30 +54,30 @@ export async function executeSetQualityAutomation(targetQuality, pageSupport, ac
     });
   }
 
-  if (isAdCurrentlyPlaying()) {
-    return makeResponse(false, action, 'Quality change skipped — Twitch ad is currently playing.', {
+  if (isAdLive()) {
+    return forgeResponse(false, action, 'Quality change skipped — Twitch ad is currently playing.', {
       targetQuality: normalizedTarget,
       pageSupport,
       ...extraDetails
     });
   }
 
-  showMenuHider();
+  deployMenuShield();
   try {
-    const closeBeforeResult = await closeMenusIfNeeded({
+    const closeBeforeResult = await sweepMenus({
       allowBodyClick: false,
       aggressiveBodyClicks: false,
       waitBeforeMs: 0,
       maxAttempts: 2
     });
     if (!closeBeforeResult.ok) {
-      debug('executeSetQualityAutomation: close-before step incomplete; continuing', closeBeforeResult);
+      debug('runQualityMission: close-before step incomplete; continuing', closeBeforeResult);
     }
 
     if (SETTINGS_MENU_DEBUG_MODE) {
-      const qualitySubmenuResult = await openQualitySubmenu();
-      debug('executeSetQualityAutomation: settings-menu debug result', qualitySubmenuResult);
-      const closeAfterDebugResult = await closeMenusIfNeeded({
+      const qualitySubmenuResult = await deployQualityPanel();
+      debug('runQualityMission: settings-menu debug result', qualitySubmenuResult);
+      const closeAfterDebugResult = await sweepMenus({
         allowBodyClick: true,
         aggressiveBodyClicks: true,
         waitBeforeMs: 160,
@@ -85,7 +85,7 @@ export async function executeSetQualityAutomation(targetQuality, pageSupport, ac
       });
 
       if (!qualitySubmenuResult.ok) {
-        return makeResponse(false, action, qualitySubmenuResult.message, {
+        return forgeResponse(false, action, qualitySubmenuResult.message, {
           targetQuality: normalizedTarget,
           settingsMenuDebugOnly: true,
           resultCode: qualitySubmenuResult.code,
@@ -98,7 +98,7 @@ export async function executeSetQualityAutomation(targetQuality, pageSupport, ac
         });
       }
 
-      return makeResponse(true, action, 'Quality submenu debug check passed. Resolution switching is temporarily disabled.', {
+      return forgeResponse(true, action, 'Quality submenu debug check passed. Resolution switching is temporarily disabled.', {
         targetQuality: normalizedTarget,
         settingsMenuDebugOnly: true,
         resultCode: qualitySubmenuResult.code,
@@ -111,7 +111,7 @@ export async function executeSetQualityAutomation(targetQuality, pageSupport, ac
       });
     }
 
-    const attemptResult = await attemptSetQuality(normalizedTarget);
+    const attemptResult = await engageQuality(normalizedTarget);
     const requestedQuality =
       validateQuality(attemptResult?.details?.requestedQuality) || validateQuality(attemptResult?.details?.targetQuality) || normalizedTarget;
     const appliedQuality =
@@ -122,19 +122,19 @@ export async function executeSetQualityAutomation(targetQuality, pageSupport, ac
         : null;
 
     // Snapshot focus state once before the close passes.
-    // If the user tabbed away while attemptSetQuality was running we must not
+    // If the user tabbed away while engageQuality was running we must not
     // dispatch a player-area body click — it would land on the video overlay
     // and toggle play/pause on the VOD (or live stream).
     const windowHasFocus = document.visibilityState === 'visible' && document.hasFocus();
-    let closeAfterResult = await closeMenusIfNeeded({
+    let closeAfterResult = await sweepMenus({
       allowBodyClick: windowHasFocus,
       aggressiveBodyClicks: true,
       waitBeforeMs: 350,
       maxAttempts: 2
     });
     if (!closeAfterResult.ok) {
-      debug('executeSetQualityAutomation: close-after first pass failed, retrying with extra settle delay', closeAfterResult);
-      const closeAfterRetryResult = await closeMenusIfNeeded({
+      debug('runQualityMission: close-after first pass failed, retrying with extra settle delay', closeAfterResult);
+      const closeAfterRetryResult = await sweepMenus({
         allowBodyClick: windowHasFocus,
         aggressiveBodyClicks: true,
         waitBeforeMs: 500,
@@ -151,11 +151,11 @@ export async function executeSetQualityAutomation(targetQuality, pageSupport, ac
           });
     }
     if (!closeAfterResult.ok) {
-      debug('executeSetQualityAutomation: close-after step incomplete', closeAfterResult);
+      debug('runQualityMission: close-after step incomplete', closeAfterResult);
     }
 
     if (!attemptResult.ok) {
-      return makeResponse(false, action, attemptResult.message, {
+      return forgeResponse(false, action, attemptResult.message, {
         requestedQuality,
         targetQuality: appliedQuality,
         appliedQuality,
@@ -170,7 +170,7 @@ export async function executeSetQualityAutomation(targetQuality, pageSupport, ac
       });
     }
 
-    return makeResponse(true, action, attemptResult.message, {
+    return forgeResponse(true, action, attemptResult.message, {
       requestedQuality,
       targetQuality: appliedQuality,
       appliedQuality,
@@ -184,22 +184,22 @@ export async function executeSetQualityAutomation(targetQuality, pageSupport, ac
       ...extraDetails
     });
   } finally {
-    await hideMenuHider();
+    await liftMenuShield();
   }
 }
 
 /** Detects current quality from visible Twitch menu state. */
-export async function detectCurrentQualityState() {
-  showMenuHider();
+export async function scanQualityState() {
+  deployMenuShield();
   try {
-    const closeBeforeResult = await closeMenusIfNeeded({ allowBodyClick: false, aggressiveBodyClicks: true, maxAttempts: 2 });
+    const closeBeforeResult = await sweepMenus({ allowBodyClick: false, aggressiveBodyClicks: true, maxAttempts: 2 });
     if (!closeBeforeResult.ok) {
-      debug('detectCurrentQualityState: close-before step incomplete; continuing', closeBeforeResult);
+      debug('scanQualityState: close-before step incomplete; continuing', closeBeforeResult);
     }
 
-    const openResult = await openQualitySubmenu();
+    const openResult = await deployQualityPanel();
     if (!openResult.ok) {
-      const closeAfterResult = await closeMenusIfNeeded({ allowBodyClick: false, aggressiveBodyClicks: true, maxAttempts: 2 });
+      const closeAfterResult = await sweepMenus({ allowBodyClick: false, aggressiveBodyClicks: true, maxAttempts: 2 });
       return createResult(false, 'CURRENT_QUALITY_OPEN_FAILED', 'Could not open quality menu to detect current selection.', {
         quality: 'unknown',
         openResult,
@@ -208,9 +208,9 @@ export async function detectCurrentQualityState() {
       });
     }
 
-    const optionsResult = collectVisibleQualityOptions();
+    const optionsResult = scanQualityOptions();
     if (!optionsResult.ok) {
-      const closeAfterResult = await closeMenusIfNeeded({ allowBodyClick: false, aggressiveBodyClicks: true, maxAttempts: 2 });
+      const closeAfterResult = await sweepMenus({ allowBodyClick: false, aggressiveBodyClicks: true, maxAttempts: 2 });
       return createResult(false, 'CURRENT_QUALITY_OPTIONS_FAILED', optionsResult.message, {
         quality: 'unknown',
         openResult,
@@ -220,8 +220,8 @@ export async function detectCurrentQualityState() {
       });
     }
 
-    const detectionResult = detectCurrentSelectedQuality(optionsResult.details.options);
-    debug('detectCurrentQualityState: selection inference result', {
+    const detectionResult = readActiveQuality(optionsResult.details.options);
+    debug('scanQualityState: selection inference result', {
       code: detectionResult.code,
       message: detectionResult.message,
       quality: detectionResult.details?.quality,
@@ -229,9 +229,9 @@ export async function detectCurrentQualityState() {
       reason: detectionResult.details?.reason
     });
 
-    const closeAfterResult = await closeMenusIfNeeded({ allowBodyClick: false, aggressiveBodyClicks: true, maxAttempts: 2 });
+    const closeAfterResult = await sweepMenus({ allowBodyClick: false, aggressiveBodyClicks: true, maxAttempts: 2 });
     if (!closeAfterResult.ok) {
-      debug('detectCurrentQualityState: close-after step incomplete', closeAfterResult);
+      debug('scanQualityState: close-after step incomplete', closeAfterResult);
     }
 
     detectionResult.details = {
@@ -241,22 +241,22 @@ export async function detectCurrentQualityState() {
     };
     return detectionResult;
   } finally {
-    await hideMenuHider();
+    await liftMenuShield();
   }
 }
 
 /** Handles action=setQuality using validated page state and robust UI automation. */
-export async function handleSetQualityRequest(targetQuality, pageSupport) {
-  return runQualityRequestExclusive('setQuality', async () => {
+export async function routeQualityRequest(targetQuality, pageSupport) {
+  return lockQualityRun('setQuality', async () => {
     const pluginEnabledResult = await loadPluginEnabledSetting();
     if (!pluginEnabledResult.ok) {
-      return makeResponse(false, 'setQuality', pluginEnabledResult.message, pluginEnabledResult.details);
+      return forgeResponse(false, 'setQuality', pluginEnabledResult.message, pluginEnabledResult.details);
     }
     if (!pluginEnabledResult.details?.pluginEnabled) {
-      return makeResponse(false, 'setQuality', 'Plugin logic is disabled. Turn it on in the popup to apply quality changes.', {
+      return forgeResponse(false, 'setQuality', 'Plugin logic is disabled. Turn it on in the popup to apply quality changes.', {
         pluginEnabled: false
       });
     }
-    return executeSetQualityAutomation(targetQuality, pageSupport, 'setQuality');
+    return runQualityMission(targetQuality, pageSupport, 'setQuality');
   });
 }

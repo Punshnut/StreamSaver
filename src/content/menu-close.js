@@ -1,25 +1,24 @@
-import { SETTINGS_MENU_CLOSE_TERMS, SETTINGS_MENU_BACK_TERMS, SETTINGS_MENU_LABEL_GROUPS, QUALITY_SET } from './constants.js';
-import { debug, createResult, isElementVisible, isMenuEntryUsable, getMenuEntryText, getVisibleText, wait, clickElementSafely, waitForCondition, jitter } from './utils.js';
+import { SETTINGS_MENU_CLOSE_TERMS, SETTINGS_MENU_BACK_TERMS, SETTINGS_MENU_LABEL_GROUPS, QUALITY_SET, SELECTORS } from './constants.js';
+import { debug, createResult, isElementVisible, isMenuEntryUsable, getMenuEntryText, getVisibleText, wait, stealthClick, awaitSignal, jitter } from './utils.js';
 import { serializeRect } from './geometry.js';
-import { findVisibleMenuRoots } from './menu-find.js';
-import { getPlayerRoot, triggerPlayerHover, findPlayerControlScopes, collectSettingsButtonCandidates } from './player.js';
-import { normalizeQualityLabel } from './quality-matching.js';
+import { scanMenuRoots } from './menu-find.js';
+import { getPlayerRoot, wakePlayerControls, mapControlZones, huntSettingsTriggers } from './player.js';
+import { parseQualityTag } from './quality-matching.js';
 import { getVisibleMenuEntryTexts } from './settings-menu.js';
-import { isAdCurrentlyPlaying } from './ad-detection.js';
+import { isAdLive } from './ad-detection.js';
 import { isBrowserInFullscreen } from './fullscreen.js';
 
 /** Attempts closing via visible "Close/Schließen" entries inside menu overlays. */
-export function tryCloseViaVisibleMenuCloseEntry() {
-  const menuRoots = findVisibleMenuRoots();
+export function strikeMenuCloseButton() {
+  const menuRoots = scanMenuRoots();
   if (menuRoots.length === 0) {
     return createResult(false, 'NO_VISIBLE_MENUS', 'No visible menus for close-entry attempt.');
   }
 
-  const selector = 'button, [role="button"], [role="menuitem"], [role="menuitemradio"], [role="option"]';
   const candidates = [];
 
   for (const menuRoot of menuRoots) {
-    for (const entry of Array.from(menuRoot.querySelectorAll(selector))) {
+    for (const entry of Array.from(menuRoot.querySelectorAll(SELECTORS.MENU_ENTRY))) {
       if (!(entry instanceof HTMLElement) || !isElementVisible(entry)) {
         continue;
       }
@@ -35,7 +34,7 @@ export function tryCloseViaVisibleMenuCloseEntry() {
       candidates.push({
         element: entry,
         text,
-        score: (entry.matches('button, [role="button"]') ? 2 : 0) + Math.max(0, 30 - text.length)
+        score: (entry.matches(SELECTORS.BUTTON_LIKE) ? 2 : 0) + Math.max(0, 30 - text.length)
       });
     }
   }
@@ -46,7 +45,7 @@ export function tryCloseViaVisibleMenuCloseEntry() {
 
   candidates.sort((a, b) => b.score - a.score);
   const target = candidates[0];
-  const clickResult = clickElementSafely(target.element, { prepare: false });
+  const clickResult = stealthClick(target.element, { prepare: false });
   if (!clickResult.ok) {
     return createResult(false, clickResult.code, 'Failed to click visible menu close entry.', {
       text: target.text,
@@ -60,15 +59,15 @@ export function tryCloseViaVisibleMenuCloseEntry() {
 }
 
 /** Tries closing menus by toggling the settings button. */
-export function tryCloseViaSettingsToggle() {
+export function strikeSettingsToggle() {
   const playerRootResult = getPlayerRoot();
   if (!playerRootResult.ok) {
     return createResult(false, 'PLAYER_NOT_FOUND', 'Cannot close via settings toggle without a player root.');
   }
 
   const playerRoot = playerRootResult.details.element;
-  const controlScopes = findPlayerControlScopes(playerRoot);
-  const candidates = collectSettingsButtonCandidates(playerRoot, controlScopes);
+  const controlScopes = mapControlZones(playerRoot);
+  const candidates = huntSettingsTriggers(playerRoot, controlScopes);
   if (candidates.length === 0) {
     return createResult(false, 'SETTINGS_TOGGLE_NOT_FOUND', 'Settings toggle not found for close attempt.');
   }
@@ -79,7 +78,7 @@ export function tryCloseViaSettingsToggle() {
   if (!expandedCandidate) {
     return createResult(false, 'NO_EXPANDED_MENU', 'Settings button found but aria-expanded is not true; skipping click to avoid re-opening menu.');
   }
-  const clickResult = clickElementSafely(expandedCandidate.element, { prepare: false });
+  const clickResult = stealthClick(expandedCandidate.element, { prepare: false });
   if (!clickResult.ok) {
     return createResult(false, clickResult.code, 'Failed to click settings toggle for close attempt.', {
       ariaLabel: expandedCandidate.ariaLabel,
@@ -104,7 +103,7 @@ function analyzeMenuForQualitySubmenu(menuRoot) {
   const hasAdvanced = SETTINGS_MENU_LABEL_GROUPS.advanced.some((term) => rootTextLower.includes(term));
   const hasSubtitles = SETTINGS_MENU_LABEL_GROUPS.subtitles.some((term) => rootTextLower.includes(term));
   const qualityOptionCount = entryTexts.filter((text) => {
-    const normalized = normalizeQualityLabel(text);
+    const normalized = parseQualityTag(text);
     return QUALITY_SET.has(normalized);
   }).length;
   const likelyQualitySubmenu = qualityOptionCount >= 1 && !hasAdvanced && !hasSubtitles;
@@ -119,8 +118,8 @@ function analyzeMenuForQualitySubmenu(menuRoot) {
 }
 
 /** If quality submenu is open, click Back first. */
-export async function tryStepBackFromQualitySubmenu() {
-  const menuRoots = findVisibleMenuRoots();
+export async function retreatFromQualityPanel() {
+  const menuRoots = scanMenuRoots();
   if (menuRoots.length === 0) {
     return createResult(false, 'NO_VISIBLE_MENUS', 'No visible menus for quality-back attempt.');
   }
@@ -187,7 +186,7 @@ export async function tryStepBackFromQualitySubmenu() {
 
   candidates.sort((a, b) => b.score - a.score);
   const target = candidates[0];
-  const clickResult = clickElementSafely(target.element, { prepare: false });
+  const clickResult = stealthClick(target.element, { prepare: false });
   if (!clickResult.ok) {
     return createResult(false, clickResult.code, 'Failed to click quality submenu back control.', {
       target,
@@ -195,8 +194,8 @@ export async function tryStepBackFromQualitySubmenu() {
     });
   }
 
-  const waitResult = await waitForCondition(() => {
-    const afterMenus = findVisibleMenuRoots();
+  const waitResult = await awaitSignal(() => {
+    const afterMenus = scanMenuRoots();
     if (afterMenus.length === 0) {
       return { closed: true };
     }
@@ -222,12 +221,12 @@ export async function tryStepBackFromQualitySubmenu() {
 }
 
 /** Attempts to close open Twitch menus, primarily via Escape. */
-export async function closeMenusIfNeeded(options = {}) {
+export async function sweepMenus(options = {}) {
   const allowBodyClick = options.allowBodyClick !== false;
   const aggressiveBodyClicks = options.aggressiveBodyClicks === true;
   const waitBeforeMs = Number.isFinite(options.waitBeforeMs) ? Math.max(0, Math.floor(options.waitBeforeMs)) : 0;
   const maxAttempts = Number.isFinite(options.maxAttempts) ? Math.max(1, Math.floor(options.maxAttempts)) : 3;
-  const getMenuCount = () => findVisibleMenuRoots().length;
+  const getMenuCount = () => scanMenuRoots().length;
 
   if (waitBeforeMs > 0) {
     await wait(waitBeforeMs);
@@ -239,7 +238,7 @@ export async function closeMenusIfNeeded(options = {}) {
     return createResult(true, 'NO_MENUS_OPEN', 'No menus were open.');
   }
 
-  debug('closeMenusIfNeeded: trying to close menus', {
+  debug('sweepMenus: trying to close menus', {
     initialCount,
     allowBodyClick,
     aggressiveBodyClicks,
@@ -260,12 +259,12 @@ export async function closeMenusIfNeeded(options = {}) {
       document,
       window
     ];
-    const seenTargets = new Set();
+    const evadedTargets = new Set();
     for (const target of escapeTargets) {
-      if (!(target instanceof EventTarget) || seenTargets.has(target)) {
+      if (!(target instanceof EventTarget) || evadedTargets.has(target)) {
         continue;
       }
-      seenTargets.add(target);
+      evadedTargets.add(target);
       const eventOptions = {
         key: 'Escape',
         code: 'Escape',
@@ -282,23 +281,23 @@ export async function closeMenusIfNeeded(options = {}) {
 
     const remaining = getMenuCount();
     if (remaining === 0) {
-      debug('closeMenusIfNeeded: closed via escape', { attempt });
+      debug('sweepMenus: closed via escape', { attempt });
       return createResult(true, 'MENUS_CLOSED', 'Menus closed successfully.', { attempts: attempt });
     }
 
     if (aggressiveBodyClicks && !backStepAttempted) {
       backStepAttempted = true;
-      const backResult = await tryStepBackFromQualitySubmenu();
+      const backResult = await retreatFromQualityPanel();
       if (backResult.ok) {
         const remainingAfterBack = getMenuCount();
         if (remainingAfterBack === 0) {
-          debug('closeMenusIfNeeded: closed while stepping back from quality submenu', { attempt, backResult });
+          debug('sweepMenus: closed while stepping back from quality submenu', { attempt, backResult });
           return createResult(true, 'MENUS_CLOSED', 'Menus closed successfully.', {
             attempts: attempt,
             closedBy: 'quality-back'
           });
         }
-        debug('closeMenusIfNeeded: exited quality submenu, continuing close cycle', {
+        debug('sweepMenus: exited quality submenu, continuing close cycle', {
           attempt,
           remainingAfterBack,
           backResult
@@ -309,11 +308,11 @@ export async function closeMenusIfNeeded(options = {}) {
 
     if (aggressiveBodyClicks && !closeEntryAttempted) {
       closeEntryAttempted = true;
-      const closeEntryResult = tryCloseViaVisibleMenuCloseEntry();
+      const closeEntryResult = strikeMenuCloseButton();
       if (closeEntryResult.ok) {
         await wait(90);
         if (getMenuCount() === 0) {
-          debug('closeMenusIfNeeded: closed via close-entry click', { attempt, closeEntryResult });
+          debug('sweepMenus: closed via close-entry click', { attempt, closeEntryResult });
           return createResult(true, 'MENUS_CLOSED', 'Menus closed successfully.', {
             attempts: attempt,
             closedBy: 'menu-close-entry'
@@ -323,11 +322,11 @@ export async function closeMenusIfNeeded(options = {}) {
     }
     if (aggressiveBodyClicks && !settingsToggleAttempted) {
       settingsToggleAttempted = true;
-      const toggleCloseResult = tryCloseViaSettingsToggle();
+      const toggleCloseResult = strikeSettingsToggle();
       if (toggleCloseResult.ok) {
         await wait(100);
         if (getMenuCount() === 0) {
-          debug('closeMenusIfNeeded: closed via settings toggle click', { attempt, toggleCloseResult });
+          debug('sweepMenus: closed via settings toggle click', { attempt, toggleCloseResult });
           return createResult(true, 'MENUS_CLOSED', 'Menus closed successfully.', {
             attempts: attempt,
             closedBy: 'settings-toggle'
@@ -343,14 +342,14 @@ export async function closeMenusIfNeeded(options = {}) {
       hoverRetryAttempted = true;
       const hoverPlayerResult = getPlayerRoot();
       if (hoverPlayerResult.ok && hoverPlayerResult.details?.element) {
-        triggerPlayerHover(hoverPlayerResult.details.element);
+        wakePlayerControls(hoverPlayerResult.details.element);
         await wait(200);
       }
-      const hoverRetryResult = tryCloseViaSettingsToggle();
+      const hoverRetryResult = strikeSettingsToggle();
       if (hoverRetryResult.ok) {
         await wait(100);
         if (getMenuCount() === 0) {
-          debug('closeMenusIfNeeded: closed via hover + settings toggle retry', { attempt });
+          debug('sweepMenus: closed via hover + settings toggle retry', { attempt });
           return createResult(true, 'MENUS_CLOSED', 'Menus closed successfully.', {
             attempts: attempt,
             closedBy: 'hover-settings-toggle-retry'
@@ -369,14 +368,14 @@ export async function closeMenusIfNeeded(options = {}) {
       if (isBrowserInFullscreen()) {
         const fsPlayerResult = getPlayerRoot();
         if (fsPlayerResult.ok && fsPlayerResult.details?.element) {
-          triggerPlayerHover(fsPlayerResult.details.element);
+          wakePlayerControls(fsPlayerResult.details.element);
           await wait(200);
         }
-        const fsToggleResult = tryCloseViaSettingsToggle();
+        const fsToggleResult = strikeSettingsToggle();
         if (fsToggleResult.ok) {
           await wait(100);
           if (getMenuCount() === 0) {
-            debug('closeMenusIfNeeded: fullscreen — closed via hover + settings toggle', { attempt });
+            debug('sweepMenus: fullscreen — closed via hover + settings toggle', { attempt });
             return createResult(true, 'MENUS_CLOSED', 'Menus closed successfully.', {
               attempts: attempt,
               closedBy: 'fullscreen-hover-settings-toggle'
@@ -400,7 +399,7 @@ export async function closeMenusIfNeeded(options = {}) {
         continue;
       }
 
-      const menuRoots = findVisibleMenuRoots();
+      const menuRoots = scanMenuRoots();
       const menuRects = menuRoots.map((root) => root.getBoundingClientRect());
       // Skip points inside open menus to avoid accidental selection.
       const pointInsideAnyMenu = (point) => {
@@ -434,7 +433,7 @@ export async function closeMenusIfNeeded(options = {}) {
         if (clickTarget.closest('a[href], [role="link"], button, [role="button"], input, select, textarea, video')) {
           continue;
         }
-        if (isAdCurrentlyPlaying()) {
+        if (isAdLive()) {
           break;
         }
         // Re-check focus at dispatch time — the allowBodyClick flag was set before
@@ -442,7 +441,7 @@ export async function closeMenusIfNeeded(options = {}) {
         // and may be stale. A stale true flag would cause a body click on Twitch's
         // play/pause overlay, toggling VOD/stream play state.
         if (!document.hasFocus() || document.visibilityState !== 'visible') {
-          debug('closeMenusIfNeeded: aborting body click — focus lost since allowBodyClick was set');
+          debug('sweepMenus: aborting body click — focus lost since allowBodyClick was set');
           break;
         }
         const mouseOptions = {
@@ -469,7 +468,7 @@ export async function closeMenusIfNeeded(options = {}) {
       await wait(120);
       const remainingAfterClick = getMenuCount();
       if (remainingAfterClick === 0) {
-        debug('closeMenusIfNeeded: closed via outside click', { attempt, aggressiveBodyClicks, clicked });
+        debug('sweepMenus: closed via outside click', { attempt, aggressiveBodyClicks, clicked });
         return createResult(true, 'MENUS_CLOSED', 'Menus closed successfully.', {
           attempts: attempt,
           closedBy: 'outside-click'

@@ -1,9 +1,9 @@
-import { enforcementState, fullscreenState, STORAGE_KEYS } from './constants.js';
+import { missionState, arenaState, STORAGE_KEYS, TIMINGS } from './constants.js';
 import { debug } from './utils.js';
-import { scheduleEnsureDesiredQualityForCurrentMode } from './enforcement.js';
-import { handleSetQualityRequest } from './automation.js';
+import { queueEnforcementRound } from './enforcement.js';
+import { routeQualityRequest } from './automation.js';
 import { isBrowserInFullscreen, attemptRestoreTwitchFullscreen } from './fullscreen.js';
-import { isSupportedTwitchPage, makeResponse } from './page-support.js';
+import { isSupportedTwitchPage, forgeResponse } from './page-support.js';
 import { loadPluginEnabledSetting } from './storage.js';
 
 /** Bridges page-support classification into structured step results. */
@@ -16,11 +16,11 @@ function getPageSupportState() {
 }
 
 /** Sets up the chrome.runtime message handler for popup communication. */
-export function setupMessageHandler() {
+export function bindCommandPort() {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       if (!message || typeof message !== 'object' || typeof message.action !== 'string') {
-        return makeResponse(false, 'unknown', 'Invalid message payload.');
+        return forgeResponse(false, 'unknown', 'Invalid message payload.');
       }
 
       const { action } = message;
@@ -28,36 +28,36 @@ export function setupMessageHandler() {
 
       const pluginEnabledResult = await loadPluginEnabledSetting();
       if (!pluginEnabledResult.ok) {
-        return makeResponse(false, action, pluginEnabledResult.message, pluginEnabledResult.details);
+        return forgeResponse(false, action, pluginEnabledResult.message, pluginEnabledResult.details);
       }
       if (!pluginEnabledResult.details?.pluginEnabled) {
-        return makeResponse(false, action, 'Plugin logic is disabled. Turn it on in the popup to apply quality changes.', {
+        return forgeResponse(false, action, 'Plugin logic is disabled. Turn it on in the popup to apply quality changes.', {
           pluginEnabled: false
         });
       }
 
       const pageSupport = getPageSupportState();
       if (!pageSupport.ok) {
-        return makeResponse(false, action, pageSupport.message, pageSupport);
+        return forgeResponse(false, action, pageSupport.message, pageSupport);
       }
 
       if (action === 'setQuality') {
-        return handleSetQualityRequest(message.targetQuality, pageSupport);
+        return routeQualityRequest(message.targetQuality, pageSupport);
       }
 
       // streamsaverPopupProbe — responds with current page support state
       if (action === 'streamsaverPopupProbe') {
-        return makeResponse(pageSupport.ok, action, pageSupport.message, pageSupport.details);
+        return forgeResponse(pageSupport.ok, action, pageSupport.message, pageSupport.details);
       }
 
-      return makeResponse(false, action, `Unknown action: ${action}`);
+      return forgeResponse(false, action, `Unknown action: ${action}`);
     })()
       .then((response) => {
         sendResponse(response);
       })
       .catch((error) => {
         debug('Unhandled message error', String(error));
-        sendResponse(makeResponse(false, 'unknown', 'Unhandled content script error.', { error: String(error) }));
+        sendResponse(forgeResponse(false, 'unknown', 'Unhandled content script error.', { error: String(error) }));
       });
 
     return true;
@@ -65,7 +65,7 @@ export function setupMessageHandler() {
 }
 
 /** Registers storage/navigation/focus hooks that keep mode quality enforced. */
-export function setupAutomaticModeEnforcement() {
+export function bootEnforcementLoop() {
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'local') {
       return;
@@ -81,23 +81,23 @@ export function setupAutomaticModeEnforcement() {
     debug('quality enforcement: storage change detected', {
       keys: relevantKeys
     });
-    scheduleEnsureDesiredQualityForCurrentMode('storage-change', {
+    queueEnforcementRound('storage-change', {
       force: true,
-      delayMs: 160
+      delayMs: TIMINGS.STORAGE_CHANGE_DELAY_MS
     });
   });
 
   // Cancel any in-flight ad polling timer before starting fresh (safety for re-init).
-  if (enforcementState.adPollingTimerId) {
-    clearInterval(enforcementState.adPollingTimerId);
-    enforcementState.adPollingTimerId = null;
+  if (missionState.adScanTimerId) {
+    clearInterval(missionState.adScanTimerId);
+    missionState.adScanTimerId = null;
   }
 
   // Compare only origin+pathname so query-param-only changes (e.g. Twitch VOD ?t= timestamp
   // updates that fire every ~10 s during playback) are not treated as SPA navigations.
   const getUrlKey = () => location.origin + location.pathname;
   let previousUrl = getUrlKey();
-  enforcementState.urlWatchTimerId = setInterval(() => {
+  missionState.urlWatchTimerId = setInterval(() => {
     const currentUrl = getUrlKey();
     if (currentUrl === previousUrl) {
       return;
@@ -109,11 +109,11 @@ export function setupAutomaticModeEnforcement() {
       fromUrl,
       toUrl: previousUrl
     });
-    scheduleEnsureDesiredQualityForCurrentMode('spa-navigation', {
+    queueEnforcementRound('spa-navigation', {
       force: true,
-      delayMs: 900
+      delayMs: TIMINGS.WARP_DELAY_MS
     });
-  }, 1000);
+  }, TIMINGS.URL_WATCH_INTERVAL_MS);
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') {
@@ -121,8 +121,8 @@ export function setupAutomaticModeEnforcement() {
     }
 
     debug('quality enforcement: tab became visible');
-    scheduleEnsureDesiredQualityForCurrentMode('visibility-visible', {
-      delayMs: 250
+    queueEnforcementRound('visibility-visible', {
+      delayMs: TIMINGS.VISIBILITY_DELAY_MS
     });
   });
 
@@ -130,11 +130,11 @@ export function setupAutomaticModeEnforcement() {
     debug('quality enforcement: window focused');
     // If a force-enforcement was blocked while focus was away (e.g. popup open during
     // a resolution change), replay it as force now so it bypasses cooldown and trust TTL.
-    const hadForcePending = enforcementState.forcePendingAfterFocus;
-    enforcementState.forcePendingAfterFocus = false;
-    scheduleEnsureDesiredQualityForCurrentMode('window-focus', {
+    const hadForcePending = missionState.forcePendingAfterFocus;
+    missionState.forcePendingAfterFocus = false;
+    queueEnforcementRound('window-focus', {
       force: hadForcePending,
-      delayMs: 300
+      delayMs: TIMINGS.FOCUS_DELAY_MS
     });
   });
 
@@ -143,23 +143,23 @@ export function setupAutomaticModeEnforcement() {
     debug('quality enforcement: fullscreenchange', { isFullscreen });
     if (isFullscreen) {
       // User entered fullscreen — remember intent and reset restoration counter.
-      fullscreenState.userIntended = true;
-      fullscreenState.restorationAttempts = 0;
+      arenaState.userIntended = true;
+      arenaState.restorationAttempts = 0;
       return;
     }
 
     // Fullscreen was lost. Decide: did our enforcement cause this, or did the user exit?
     // Signal: enforcement was running at the moment fullscreen exited, or completed very
     // recently (≤3 s) — Twitch reacts to our DOM clicks with a slight delay.
-    const msSinceEnforcement = Date.now() - enforcementState.lastRunAtMs;
-    const likelyCausedByUs = fullscreenState.userIntended
-      && (enforcementState.inProgress || msSinceEnforcement < 2000);
+    const msSinceEnforcement = Date.now() - missionState.lastStrikeAtMs;
+    const likelyCausedByUs = arenaState.userIntended
+      && (missionState.inProgress || msSinceEnforcement < TIMINGS.ENFORCEMENT_RECENT_WINDOW_MS);
 
-    if (likelyCausedByUs && fullscreenState.restorationAttempts < 3) {
-      fullscreenState.restorationAttempts += 1;
+    if (likelyCausedByUs && arenaState.restorationAttempts < 3) {
+      arenaState.restorationAttempts += 1;
       debug('fullscreen restore: fullscreen lost during/after enforcement, scheduling restore', {
-        attempt: fullscreenState.restorationAttempts,
-        enforcementInProgress: enforcementState.inProgress,
+        attempt: arenaState.restorationAttempts,
+        enforcementInProgress: missionState.inProgress,
         msSinceEnforcement
       });
       // Give Twitch time to fully settle into cinema mode before re-entering fullscreen.
@@ -167,21 +167,21 @@ export function setupAutomaticModeEnforcement() {
         if (isBrowserInFullscreen()) {
           return; // already back in fullscreen somehow
         }
-        if (fullscreenState.restorationInProgress) {
+        if (arenaState.restorationInProgress) {
           return;
         }
-        fullscreenState.restorationInProgress = true;
+        arenaState.restorationInProgress = true;
         attemptRestoreTwitchFullscreen().catch((err) => {
           debug('fullscreen restore: error', String(err));
         }).finally(() => {
-          fullscreenState.restorationInProgress = false;
+          arenaState.restorationInProgress = false;
         });
-      }, 800);
+      }, TIMINGS.FULLSCREEN_RESTORE_DELAY_MS);
     } else {
       // User intentionally exited fullscreen — clear intent, apply quality.
-      fullscreenState.userIntended = false;
-      fullscreenState.restorationAttempts = 0;
-      scheduleEnsureDesiredQualityForCurrentMode('fullscreen-exit', { delayMs: 500 });
+      arenaState.userIntended = false;
+      arenaState.restorationAttempts = 0;
+      queueEnforcementRound('fullscreen-exit', { delayMs: TIMINGS.FULLSCREEN_EXIT_DELAY_MS });
     }
   }
   document.addEventListener('fullscreenchange', onFullscreenChange);
@@ -189,9 +189,9 @@ export function setupAutomaticModeEnforcement() {
 
   window.addEventListener('pageshow', () => {
     debug('quality enforcement: pageshow event');
-    scheduleEnsureDesiredQualityForCurrentMode('pageshow', {
+    queueEnforcementRound('pageshow', {
       force: true,
-      delayMs: 700
+      delayMs: TIMINGS.PAGESHOW_DELAY_MS
     });
   });
 }

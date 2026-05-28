@@ -41,7 +41,7 @@ export async function loadModeSettingsForEnforcement() {
 }
 
 /** Resolves target quality from current mode settings. */
-export function resolveTargetQualityForMode(modeSettings) {
+export function aimQualityForMode(modeSettings) {
   const pluginEnabled = validatePluginEnabled(modeSettings?.pluginEnabled);
   const activeMode = validateMode(modeSettings?.activeMode);
   const fastToggleLow = validateQuality(modeSettings?.fastToggleLow) || DEFAULT_MODE_SETTINGS[STORAGE_KEYS.FAST_TOGGLE_LOW];

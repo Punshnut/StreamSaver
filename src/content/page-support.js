@@ -1,7 +1,7 @@
 import { QUALITY_SET, MODE_SET, MODE_VALUES } from './constants.js';
 import { debug, serializeForMessage } from './utils.js';
 import { getPlayerRoot } from './player.js';
-import { normalizeQualityLabel } from './quality-matching.js';
+import { parseQualityTag } from './quality-matching.js';
 
 /** Classifies current Twitch URL as supported/unsupported with a clear reason. */
 export function isSupportedTwitchPage() {
@@ -106,7 +106,7 @@ export function isSupportedTwitchPage() {
 }
 
 /** Standard response envelope returned to popup message callers. */
-export function makeResponse(ok, action, message, details = null) {
+export function forgeResponse(ok, action, message, details = null) {
   return {
     ok,
     action,
@@ -117,7 +117,7 @@ export function makeResponse(ok, action, message, details = null) {
 
 /** Validates and normalizes inbound quality values from popup messages. */
 export function validateQuality(value) {
-  const normalized = normalizeQualityLabel(value);
+  const normalized = parseQualityTag(value);
   return QUALITY_SET.has(normalized) ? normalized : '';
 }
 

@@ -5,3 +5,8 @@ export const MODE_VALUES = {
   HIGH: 'high'
 };
 export const MODE_SET = new Set(Object.values(MODE_VALUES));
+
+/** Returns value if it's a valid quality string, otherwise returns fallback. */
+export function resolveQuality(value, fallback) {
+  return QUALITY_SET.has(value) ? value : fallback;
+}

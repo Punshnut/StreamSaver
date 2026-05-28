@@ -1,5 +1,5 @@
-import { debug, wait, isElementVisible, clickElementSafely } from './utils.js';
-import { getPlayerRoot, triggerPlayerHover } from './player.js';
+import { debug, wait, isElementVisible, stealthClick } from './utils.js';
+import { getPlayerRoot, wakePlayerControls } from './player.js';
 
 /** Returns true when the browser's fullscreen API has an active element. */
 export function isBrowserInFullscreen() {
@@ -55,7 +55,7 @@ export async function attemptRestoreTwitchFullscreen() {
   // Letting Twitch handle the requestFullscreen() call internally ensures it uses
   // the right element and applies the correct layout — direct API calls cause a
   // partial layout glitch (bottom ~20% dark, player shifted up).
-  triggerPlayerHover(playerRoot);
+  wakePlayerControls(playerRoot);
   await wait(600);
 
   const btn = findTwitchFullscreenButton();
@@ -86,5 +86,5 @@ export async function attemptRestoreTwitchFullscreen() {
   }
 
   debug('fullscreen restore: clicking button to restore', { label: btn.getAttribute('aria-label') });
-  clickElementSafely(btn, { prepare: false });
+  stealthClick(btn, { prepare: false });
 }

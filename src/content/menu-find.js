@@ -3,7 +3,7 @@ import { isElementVisible, isMenuEntryUsable } from './utils.js';
 import { serializeRect, isRectNear } from './geometry.js';
 
 /** Collects visible menu-like overlay roots. */
-export function findVisibleMenuRoots() {
+export function scanMenuRoots() {
   const selectors = [
     '[role="menu"]',
     '[role="listbox"]',
@@ -100,7 +100,7 @@ export function findPlayerNearQualityPanel(playerRoot) {
     return null;
   }
 
-  const roots = findVisibleMenuRoots();
+  const roots = scanMenuRoots();
   const seen = new Set(roots);
   for (const root of findSettingsMenuRootsByText()) {
     if (!seen.has(root)) {

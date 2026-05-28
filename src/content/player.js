@@ -2,17 +2,19 @@ import { SETTINGS_TRIGGER_TERMS } from './constants.js';
 import { createResult, isElementVisible, getVisibleText, jitter } from './utils.js';
 import { serializeRect, isRectInside } from './geometry.js';
 
-/** Finds the best visible root for the Twitch player. */
-export function getPlayerRoot() {
-  const selectors = [
-    '[data-a-target="video-player"]',
-    '[role="application"][aria-label*="player" i]',
-    '[role="region"][aria-label*="player" i]',
-    '[role="region"][aria-label*="video" i]',
-    'video'
-  ];
+const PLAYER_SELECTORS = [
+  '[data-a-target="video-player"]',
+  '[role="application"][aria-label*="player" i]',
+  '[role="region"][aria-label*="player" i]',
+  '[role="region"][aria-label*="video" i]',
+  'video'
+];
 
-  for (const selector of selectors) {
+// Lock-on cache for the player root. Released when the element leaves the DOM.
+let lockedPlayerRoot = null;
+
+function huntPlayerRoot() {
+  for (const selector of PLAYER_SELECTORS) {
     const candidates = Array.from(document.querySelectorAll(selector));
     for (const candidate of candidates) {
       const root = selector === 'video' ? candidate.closest('section, div, main, article') || candidate : candidate;
@@ -24,12 +26,24 @@ export function getPlayerRoot() {
       }
     }
   }
-
   return createResult(false, 'PLAYER_NOT_FOUND', 'No visible Twitch player root was found.');
 }
 
-/** Shows player controls by dispatching hover events. */
-export function triggerPlayerHover(playerRoot) {
+/** Finds the best visible root for the Twitch player, with DOM-connected lock-on cache. */
+export function getPlayerRoot() {
+  if (lockedPlayerRoot?.isConnected && isElementVisible(lockedPlayerRoot)) {
+    return createResult(true, 'PLAYER_FOUND', 'Found likely Twitch player root.', {
+      selector: 'cached',
+      element: lockedPlayerRoot
+    });
+  }
+  const result = huntPlayerRoot();
+  lockedPlayerRoot = result.ok ? result.details.element : null;
+  return result;
+}
+
+/** Wakes player controls by dispatching hover events. */
+export function wakePlayerControls(playerRoot) {
   if (!(playerRoot instanceof Element)) {
     return;
   }
@@ -51,8 +65,8 @@ export function triggerPlayerHover(playerRoot) {
   }
 }
 
-/** Finds visible player control containers inside the active player root. */
-export function findPlayerControlScopes(playerRoot) {
+/** Maps visible player control containers inside the active player root. */
+export function mapControlZones(playerRoot) {
   if (!(playerRoot instanceof Element)) {
     return [];
   }
@@ -85,8 +99,8 @@ export function findPlayerControlScopes(playerRoot) {
   return scopes;
 }
 
-/** Finds settings-button candidates only inside the player controls region. */
-export function collectSettingsButtonCandidates(playerRoot, controlScopes) {
+/** Hunts for settings-trigger candidates only inside the player controls region. */
+export function huntSettingsTriggers(playerRoot, controlScopes) {
   if (!(playerRoot instanceof Element)) {
     return [];
   }

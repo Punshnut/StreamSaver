@@ -19,15 +19,15 @@ export const actionButtons = [...qualityButtons, modeLowButton, modeHighButton].
 
 // Module-level state
 export let statusResetTimer = null;
-export let isActionInFlight = false;
+export let isRoundActive = false;
 export let isQuickResolutionVisible = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.QUICK_RESOLUTION_VISIBLE]);
 export let isPluginEnabled = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.PLUGIN_ENABLED]);
 export let idleStatusType = STATUS_TYPES.SUCCESS;
 export let idleStatusMessage = READY_STATUS_MESSAGE;
 
-// Callback pattern to break circular dep: endAction → syncModeButtonsState (in mode-quality.js)
-let _onEndAction = () => {};
-export function setEndActionCallback(fn) { _onEndAction = fn; }
+// Callback pattern to break circular dep: releaseControls → refreshModeHUD (in mode-quality.js)
+let onActionComplete = () => {};
+export function setReleaseCallback(fn) { onActionComplete = fn; }
 
 /** Clears any pending status reset timer. */
 export function clearStatusResetTimer() {
@@ -66,23 +66,23 @@ export function setActionButtonsDisabled(disabled) {
 }
 
 /** Starts an action; returns false when busy. */
-export function beginAction(loadingMessage) {
-  if (isActionInFlight) {
+export function lockControls(loadingMessage) {
+  if (isRoundActive) {
     setStatus(STATUS_TYPES.LOADING, 'Another action is still running...');
     return false;
   }
 
-  isActionInFlight = true;
+  isRoundActive = true;
   setActionButtonsDisabled(true);
   setStatus(STATUS_TYPES.LOADING, loadingMessage);
   return true;
 }
 
 /** Completes the current popup action and restores button interactivity. */
-export function endAction() {
-  isActionInFlight = false;
+export function releaseControls() {
+  isRoundActive = false;
   setActionButtonsDisabled(false);
-  _onEndAction();
+  onActionComplete();
 }
 
 /** Syncs Quick Resolution visibility and ARIA state. */

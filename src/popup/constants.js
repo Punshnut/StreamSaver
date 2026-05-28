@@ -1,4 +1,4 @@
-export { QUALITY_VALUES, QUALITY_SET, MODE_VALUES, MODE_SET } from '../shared/constants.js';
+export { QUALITY_VALUES, QUALITY_SET, MODE_VALUES, MODE_SET, resolveQuality } from '../shared/constants.js';
 import { MODE_VALUES } from '../shared/constants.js';
 
 export const MODE_LABELS = {
@@ -32,3 +32,18 @@ export const DISABLED_STATUS_MESSAGE = 'Plugin logic is disabled. Settings are s
 export const OPEN_TWITCH_STREAM_STATUS_MESSAGE = 'Open a live Twitch stream on www.twitch.tv to control quality.';
 export const RELOAD_TWITCH_TAB_STATUS_MESSAGE = 'Reload the Twitch tab and try again.';
 export const UNSUPPORTED_TWITCH_HOST_STATUS_MESSAGE = 'This Twitch tab is unsupported. Open a stream on www.twitch.tv.';
+
+// Popup-side timing constants.
+export const POPUP_TIMINGS = {
+  STATUS_SUCCESS_RESET_MS: 1_500, // how long a success status is shown before reverting to idle
+};
+
+/** True when a URL points to any Twitch page/subdomain. */
+export function isTwitchUrl(url) {
+  return typeof url === 'string' && /^https:\/\/([a-z0-9-]+\.)?twitch\.tv\//i.test(url);
+}
+
+/** True when URL matches the host where this extension injects content scripts. */
+export function isInjectableTwitchUrl(url) {
+  return typeof url === 'string' && /^https:\/\/www\.twitch\.tv\//i.test(url);
+}
