@@ -37,6 +37,7 @@ import { loadPluginEnabledSetting, loadModeSettingsForEnforcement, aimQualityFor
 import { runQualityMission, lockQualityRun, scanQualityState } from './automation.js';
 import { sweepMenus } from './menu-close.js';
 import { isBrowserInFullscreen, attemptRestoreTwitchFullscreen } from './fullscreen.js';
+import { scanMenuRoots } from './menu-find.js';
 
 /** Bridges page-support classification into structured step results. */
 function getPageSupportState() {
@@ -165,6 +166,19 @@ export async function runEnforcementRound(triggerReason = 'unknown', options = {
     queueEnforcementRound('typing-resume', { delayMs: TIMINGS.TYPING_RESUME_DELAY_MS });
     return createResult(false, 'USER_TYPING', 'Quality enforcement skipped — user is typing in a text input.');
   }
+
+  // --- Guard 5.5: user-opened player menu ---
+  // If a player menu is visible but we are not running automation (inProgress is still
+  // false here, checked in Guard 1), the user opened it themselves. Hold enforcement
+  // until the menu closes; setup.js watches for removal and re-queues us automatically.
+  const userMenuVisible = scanMenuRoots().some(el => el.offsetParent !== null);
+  if (userMenuVisible) {
+    missionState.userMenuOpen = true;
+    if (force) missionState.userMenuForcePending = true;
+    debug('quality enforcement: user has a player menu open — pausing automation', { triggerReason });
+    return createResult(false, 'USER_MENU_OPEN', 'Quality enforcement paused — user has a player menu open.');
+  }
+  missionState.userMenuOpen = false;
 
   missionState.inProgress = true;
   debug('quality enforcement: run started', {

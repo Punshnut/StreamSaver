@@ -29,6 +29,7 @@ import { routeQualityRequest } from './automation.js';
 import { isBrowserInFullscreen, attemptRestoreTwitchFullscreen } from './fullscreen.js';
 import { isSupportedTwitchPage, forgeResponse } from './page-support.js';
 import { loadPluginEnabledSetting } from './storage.js';
+import { scanMenuRoots } from './menu-find.js';
 
 /** Bridges page-support classification into structured step results. */
 function getPageSupportState() {
@@ -258,4 +259,35 @@ export function bootEnforcementLoop() {
       delayMs: TIMINGS.PAGESHOW_DELAY_MS
     });
   });
+
+  // --- Trigger 7: user-opened menu closed ---
+  // Watch for menu removal so we can resume automation promptly when the user
+  // closes a player menu they opened themselves (Guard 5.5 in enforcement.js
+  // pauses enforcement while userMenuOpen is true).
+  watchUserMenuActivity();
+}
+
+/**
+ * Watches the DOM for player menu removal. When enforcement was paused because
+ * the user had a menu open (missionState.userMenuOpen), re-queues enforcement as
+ * soon as all visible menu roots are gone.
+ *
+ * The MutationObserver callback exits immediately in the common case where no
+ * user menu is active, so the constant subtree observation has negligible overhead.
+ */
+function watchUserMenuActivity() {
+  const observer = new MutationObserver(() => {
+    if (!missionState.userMenuOpen) return;
+    if (scanMenuRoots().some(el => el.offsetParent !== null)) return; // still open
+
+    const hadForcePending = missionState.userMenuForcePending;
+    missionState.userMenuOpen = false;
+    missionState.userMenuForcePending = false;
+    debug('quality enforcement: user menu closed — resuming');
+    queueEnforcementRound('user-menu-closed', {
+      force: hadForcePending,
+      delayMs: TIMINGS.USER_MENU_RESUME_DELAY_MS
+    });
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
 }

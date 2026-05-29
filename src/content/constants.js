@@ -76,6 +76,7 @@ export const TIMINGS = {
   ENFORCEMENT_DEBOUNCE_MS: 600,    // base debounce for scheduled enforcement
   PLAYER_READY_TIMEOUT_MS: 6_000,  // max wait for player to appear before aborting
   QUALITY_TRUST_TTL_MS: 25_000,    // skip detect+set when quality was recently confirmed
+  USER_MENU_RESUME_DELAY_MS: 400,  // settle time after user-opened menu closes before re-enforcement
 };
 
 // Named re-exports for backwards compatibility with existing imports.
@@ -99,7 +100,9 @@ export const missionState = {
   lastConfirmedQualityAtMs: 0, // when quality was last successfully confirmed (detect or set)
   urlWatchTimerId: null,
   adScanTimerId: null,      // setInterval handle while waiting for an ad to finish
-  forcePendingAfterFocus: false // force enforcement was blocked by focus-loss; re-fire on next focus
+  forcePendingAfterFocus: false, // force enforcement was blocked by focus-loss; re-fire on next focus
+  userMenuOpen: false,           // user has a player menu open; enforcement is paused
+  userMenuForcePending: false,   // a force-enforcement was blocked by userMenuOpen; replay on menu close
 };
 
 export const arenaState = {
