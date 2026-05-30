@@ -325,7 +325,7 @@ body {
 }
 
 .quality-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(12, 1fr);
   gap: 5px;
 }
 
@@ -336,9 +336,9 @@ body {
   font-weight: 700;
 }
 
-.quality-btn--auto {
-  grid-column: 1 / -1;
-}
+.quality-btn:nth-child(-n+4)               { grid-column: span 3; }
+.quality-btn:nth-child(n+5):nth-child(-n+7) { grid-column: span 4; }
+.quality-btn:nth-child(n+8)               { grid-column: span 6; }
 
 /* Action controls */
 button,
