@@ -351,6 +351,10 @@ export async function sweepMenus(options = {}) {
     }
     if (aggressiveBodyClicks && !settingsToggleAttempted) {
       settingsToggleAttempted = true;
+      if (getMenuCount() === 0) {
+        debug('sweepMenus: menus settled closed before settings toggle', { attempt });
+        return createResult(true, 'MENUS_CLOSED', 'Menus closed successfully.', { attempts: attempt, closedBy: 'pre-toggle-settled' });
+      }
       const toggleCloseResult = strikeSettingsToggle();
       if (toggleCloseResult.ok) {
         await wait(100);
@@ -369,10 +373,19 @@ export async function sweepMenus(options = {}) {
     // always runs before the outside-click fallback — which can accidentally toggle VOD play/pause.
     if (aggressiveBodyClicks && !hoverRetryAttempted) {
       hoverRetryAttempted = true;
+      if (getMenuCount() === 0) {
+        debug('sweepMenus: menus settled closed before hover retry', { attempt });
+        return createResult(true, 'MENUS_CLOSED', 'Menus closed successfully.', { attempts: attempt, closedBy: 'pre-hover-settled' });
+      }
       const hoverPlayerResult = getPlayerRoot();
       if (hoverPlayerResult.ok && hoverPlayerResult.details?.element) {
         wakePlayerControls(hoverPlayerResult.details.element);
         await wait(200);
+      }
+      // Menu may have finished its close animation during the hover wait — don't toggle it back open.
+      if (getMenuCount() === 0) {
+        debug('sweepMenus: menus settled closed during hover wait', { attempt });
+        return createResult(true, 'MENUS_CLOSED', 'Menus closed successfully.', { attempts: attempt, closedBy: 'hover-settle' });
       }
       const hoverRetryResult = strikeSettingsToggle();
       if (hoverRetryResult.ok) {
