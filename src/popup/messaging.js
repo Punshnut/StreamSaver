@@ -49,7 +49,7 @@ export function sendMessageToTab(tabId, message) {
       }
 
       if (!response || typeof response !== 'object') {
-        reject(new Error('No valid response from page script.'));
+        reject(new Error('Invalid response from content script.'));
         return;
       }
 
@@ -175,7 +175,6 @@ export async function launchActionWithStatus(request, loadingMessage) {
 
   try {
     const response = await dispatchToActiveTab(request);
-    console.log('[StreamSaver][popup] Response from content script:', response);
 
     // Validate that the response matches the expected shape and action.
     if (!isStructuredActionResponse(response, request.action)) {

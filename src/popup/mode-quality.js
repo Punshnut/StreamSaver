@@ -10,7 +10,7 @@
  * handleModeButtonClick()  — saves mode, applies its quality, updates HUD
  */
 
-import { QUALITY_SET, MODE_SET, MODE_VALUES, MODE_LABELS, SETTINGS_KEYS, DEFAULT_SETTINGS, STATUS_TYPES } from './constants.js';
+import { QUALITY_SET, MODE_SET, MODE_VALUES, MODE_LABELS, SETTINGS_KEYS, DEFAULT_SETTINGS, STATUS_TYPES, POPUP_TIMINGS } from './constants.js';
 import { resolveQuality } from '../shared/constants.js';
 import { isPluginEnabled, setStatus, popupRoot, modeLowButton, modeHighButton, modeSummaryEl, fastToggleLow, fastToggleHigh, setReleaseCallback } from './ui.js';
 import { launchActionWithStatus, craftQualityRequest } from './messaging.js';
@@ -90,7 +90,6 @@ setReleaseCallback(refreshModeHUD);
 /** Handles one quick-resolution button click and dispatches setQuality. */
 export function handleQualityButtonClick(button) {
   const quality = sanitizeQualityValue(button.dataset.quality, 'Unknown');
-  console.log(`[StreamSaver][popup] Quality click: ${quality}`);
 
   // Reject unknown values that somehow got into the button's data attribute.
   if (!isSupportedQuality(quality)) {
@@ -107,7 +106,7 @@ export async function handleModeButtonClick(mode) {
 
   // No-op if the clicked mode is already active — show a brief confirmation.
   if (normalizedMode === currentActiveMode) {
-    setStatus(STATUS_TYPES.SUCCESS, `Mode already set: ${getModeLabel(normalizedMode)}.`, 1000);
+    setStatus(STATUS_TYPES.SUCCESS, `Mode already set: ${getModeLabel(normalizedMode)}.`, POPUP_TIMINGS.STATUS_INFO_RESET_MS);
     return;
   }
 
@@ -117,7 +116,7 @@ export async function handleModeButtonClick(mode) {
   refreshModeHUD();
 
   // Persist the new mode — roll back the optimistic update if the save fails.
-  const didSave = await saveSetting(SETTINGS_KEYS.ACTIVE_MODE, normalizedMode, `Mode set: ${getModeLabel(normalizedMode)}.`);
+  const didSave = await saveSetting(SETTINGS_KEYS.ACTIVE_MODE, normalizedMode, `Switched to ${getModeLabel(normalizedMode)}.`);
   if (!didSave) {
     currentActiveMode = previousMode;
     refreshModeHUD();
@@ -127,7 +126,7 @@ export async function handleModeButtonClick(mode) {
   // If the plugin is off, save was still valuable (persists the preference) but
   // we shouldn't try to apply quality — tell the user explicitly.
   if (!isPluginEnabled) {
-    setStatus(STATUS_TYPES.SUCCESS, 'Mode saved. Plugin logic is disabled, so no player changes were applied.', 1400);
+    setStatus(STATUS_TYPES.SUCCESS, 'Mode saved. Plugin logic is disabled, so no player changes were applied.', POPUP_TIMINGS.STATUS_SAVE_RESET_MS);
     return;
   }
 

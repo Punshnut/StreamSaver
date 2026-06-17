@@ -19,8 +19,6 @@ import { launchActionWithStatus, craftQualityRequest } from './messaging.js';
 import { loadSettings, saveSetting, handleSelectChange } from './settings.js';
 import { probeIdleStatus } from './idle-status.js';
 
-console.log('[StreamSaver][popup] Popup loaded');
-
 /** Binds click handlers for quality and mode controls. */
 function bindActionHandlers() {
   // Each quality button carries its target quality in data-quality.

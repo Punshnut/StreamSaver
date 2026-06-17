@@ -8,7 +8,7 @@
  * loadSettings()     — reads all settings on popup open, hydrates all controls
  */
 
-import { SETTINGS_KEYS, DEFAULT_SETTINGS, STATUS_TYPES } from './constants.js';
+import { SETTINGS_KEYS, DEFAULT_SETTINGS, STATUS_TYPES, POPUP_TIMINGS } from './constants.js';
 import { setActionButtonsDisabled, setStatus, isRoundActive, setQuickResolutionVisibility, setPluginEnabledState, fastToggleLow, fastToggleHigh } from './ui.js';
 import { sanitizeQualityValue, sanitizeModeValue, refreshModeHUD, setCurrentActiveMode } from './mode-quality.js';
 import { probeIdleStatus } from './idle-status.js';
@@ -17,9 +17,7 @@ import { probeIdleStatus } from './idle-status.js';
 export async function saveSetting(key, value, successMessage = '') {
   try {
     await chrome.storage.local.set({ [key]: value });
-    console.log(`[StreamSaver][popup] Saved setting ${key}: ${value}`);
-    // Show a brief success status — auto-resets after 1.2 s.
-    setStatus(STATUS_TYPES.SUCCESS, successMessage || `Saved ${key}: ${value}`, 1200);
+    setStatus(STATUS_TYPES.SUCCESS, successMessage || `Saved ${key}: ${value}`, POPUP_TIMINGS.STATUS_SAVE_RESET_MS);
     return true;
   } catch (error) {
     console.error(`[StreamSaver][popup] Failed to save setting ${key}:`, error);
@@ -40,7 +38,6 @@ export function handleSelectChange(settingKey, selectEl) {
     return;
   }
 
-  console.log(`[StreamSaver][popup] ${settingKey} set to: ${selectedValue}`);
   saveSetting(settingKey, selectedValue); // fire-and-forget
 }
 
@@ -69,14 +66,6 @@ export async function loadSettings() {
     setQuickResolutionVisibility(quickResolutionVisible);
     setPluginEnabledState(pluginEnabled);
     refreshModeHUD();
-
-    console.log('[StreamSaver][popup] Settings loaded:', {
-      lowValue,
-      highValue,
-      activeMode,
-      quickResolutionVisible,
-      pluginEnabled
-    });
 
     // Probe the active tab to set the correct idle status (ready / no stream / disabled).
     await probeIdleStatus(true);

@@ -22,8 +22,8 @@ export { QUALITY_VALUES, QUALITY_SET, MODE_VALUES, MODE_SET, resolveQuality } fr
 import { MODE_VALUES } from '../shared/constants.js';
 
 export const MODE_LABELS = {
-  [MODE_VALUES.LOW]: 'Travel Mode / Data Saver',
-  [MODE_VALUES.HIGH]: 'High Quality Mode'
+  [MODE_VALUES.LOW]: 'Travel / Data Saver',
+  [MODE_VALUES.HIGH]: 'High Quality'
 };
 export const ACTION_NAMES = {
   SET_QUALITY: 'setQuality'
@@ -55,7 +55,9 @@ export const UNSUPPORTED_TWITCH_HOST_STATUS_MESSAGE = 'This Twitch tab is unsupp
 
 // Popup-side timing constants.
 export const POPUP_TIMINGS = {
-  STATUS_SUCCESS_RESET_MS: 1_500, // how long a success status is shown before reverting to idle
+  STATUS_SUCCESS_RESET_MS: 1_500, // quality apply / default success reset
+  STATUS_SAVE_RESET_MS:    1_200, // save-setting confirmations
+  STATUS_INFO_RESET_MS:    1_000, // brief info (e.g. already-active mode click)
 };
 
 /** True when a URL points to any Twitch page/subdomain. */
