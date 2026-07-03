@@ -97,7 +97,9 @@ export function handleQualityButtonClick(button) {
     return;
   }
 
-  launchActionWithStatus(craftQualityRequest(quality), `Applying ${quality}...`);
+  // Quick-resolution buttons manually override the plugin-enabled gate so they
+  // work even when plugin logic is turned off.
+  launchActionWithStatus(craftQualityRequest(quality, true), `Applying ${quality}...`);
 }
 
 /** Saves mode change, then applies its target quality. */

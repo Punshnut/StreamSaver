@@ -316,19 +316,23 @@ export async function scanQualityState() {
 }
 
 /** Handles action=setQuality using validated page state and robust UI automation. */
-export async function routeQualityRequest(targetQuality, pageSupport) {
+export async function routeQualityRequest(targetQuality, pageSupport, manualOverride = false) {
   // Acquire the mutex so concurrent popup clicks don't race each other.
   return lockQualityRun('setQuality', async () => {
-    // Re-read plugin state at dispatch time — user may have toggled it
-    // between the original message check and this inner execution.
-    const pluginEnabledResult = await loadPluginEnabledSetting();
-    if (!pluginEnabledResult.ok) {
-      return forgeResponse(false, 'setQuality', pluginEnabledResult.message, pluginEnabledResult.details);
-    }
-    if (!pluginEnabledResult.details?.pluginEnabled) {
-      return forgeResponse(false, 'setQuality', 'Plugin logic is disabled. Turn it on in the popup to apply quality changes.', {
-        pluginEnabled: false
-      });
+    // Manual-override requests (quick-resolution buttons) skip the plugin-enabled
+    // re-check entirely so they apply even when plugin logic is turned off.
+    if (!manualOverride) {
+      // Re-read plugin state at dispatch time — user may have toggled it
+      // between the original message check and this inner execution.
+      const pluginEnabledResult = await loadPluginEnabledSetting();
+      if (!pluginEnabledResult.ok) {
+        return forgeResponse(false, 'setQuality', pluginEnabledResult.message, pluginEnabledResult.details);
+      }
+      if (!pluginEnabledResult.details?.pluginEnabled) {
+        return forgeResponse(false, 'setQuality', 'Plugin logic is disabled. Turn it on in the popup to apply quality changes.', {
+          pluginEnabled: false
+        });
+      }
     }
     return runQualityMission(targetQuality, pageSupport, 'setQuality');
   });

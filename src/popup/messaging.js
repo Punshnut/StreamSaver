@@ -161,8 +161,9 @@ export function craftSuccessLabel(request, response) {
 /** Runs one action and updates popup status. */
 export async function launchActionWithStatus(request, loadingMessage) {
   // Guard: don't send if the plugin is disabled — the content script would reject
-  // it anyway, but we show a clearer message from the popup side.
-  if (!isPluginEnabled) {
+  // it anyway, but we show a clearer message from the popup side. Manual-override
+  // requests (quick-resolution buttons) bypass this so they work even when off.
+  if (!isPluginEnabled && !request.manualOverride) {
     setStatus(STATUS_TYPES.ERROR, 'Plugin logic is disabled. Turn it on to apply quality changes.');
     return;
   }
@@ -202,9 +203,10 @@ export async function launchActionWithStatus(request, loadingMessage) {
 }
 
 /** Creates the normalized payload used for direct quality-set actions. */
-export function craftQualityRequest(quality) {
+export function craftQualityRequest(quality, manualOverride = false) {
   return {
     action: ACTION_NAMES.SET_QUALITY,
-    targetQuality: quality
+    targetQuality: quality,
+    manualOverride
   };
 }

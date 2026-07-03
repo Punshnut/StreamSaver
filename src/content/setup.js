@@ -55,15 +55,19 @@ export function bindCommandPort() {
       debug('Received message', { action, message, sender });
 
       // Plugin-enabled check comes before page-support so users get a clear
-      // "plugin is off" message rather than a confusing page error.
-      const pluginEnabledResult = await loadPluginEnabledSetting();
-      if (!pluginEnabledResult.ok) {
-        return forgeResponse(false, action, pluginEnabledResult.message, pluginEnabledResult.details);
-      }
-      if (!pluginEnabledResult.details?.pluginEnabled) {
-        return forgeResponse(false, action, 'Plugin logic is disabled. Turn it on in the popup to apply quality changes.', {
-          pluginEnabled: false
-        });
+      // "plugin is off" message rather than a confusing page error. Quick-resolution
+      // buttons send manualOverride to bypass this and work even when off.
+      const isManualQualityOverride = action === 'setQuality' && message.manualOverride === true;
+      if (!isManualQualityOverride) {
+        const pluginEnabledResult = await loadPluginEnabledSetting();
+        if (!pluginEnabledResult.ok) {
+          return forgeResponse(false, action, pluginEnabledResult.message, pluginEnabledResult.details);
+        }
+        if (!pluginEnabledResult.details?.pluginEnabled) {
+          return forgeResponse(false, action, 'Plugin logic is disabled. Turn it on in the popup to apply quality changes.', {
+            pluginEnabled: false
+          });
+        }
       }
 
       // Reject the message if the current page can't support quality automation.
@@ -74,7 +78,7 @@ export function bindCommandPort() {
 
       if (action === 'setQuality') {
         // Full quality-switch pipeline — acquires the automation lock internally.
-        return routeQualityRequest(message.targetQuality, pageSupport);
+        return routeQualityRequest(message.targetQuality, pageSupport, message.manualOverride === true);
       }
 
       // Probe used by the popup to set its idle status on open — returns whether
