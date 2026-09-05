@@ -26,18 +26,23 @@ import { STATUS_TYPES, SETTINGS_KEYS, DEFAULT_SETTINGS, READY_STATUS_MESSAGE, DI
 export const statusEl = document.getElementById('status');
 export const popupRoot = document.querySelector('.popup');
 export const modeLowButton = document.getElementById('mode-low-btn');
+export const modeMediumButton = document.getElementById('mode-medium-btn');
 export const modeHighButton = document.getElementById('mode-high-btn');
+export const modeToggleGroup = document.querySelector('.mode-toggle');
 export const modeSummaryEl = document.getElementById('mode-summary');
 export const qualityButtons = Array.from(document.querySelectorAll('.quality-btn'));
 export const fastToggleLow = document.getElementById('fastToggleLow');
+export const fastToggleMedium = document.getElementById('fastToggleMedium');
 export const fastToggleHigh = document.getElementById('fastToggleHigh');
+export const fastToggleMediumRow = document.getElementById('fastToggleMediumRow');
 export const pluginEnabledToggle = document.getElementById('plugin-enabled');
 export const pluginEnabledLabel = document.getElementById('plugin-enabled-label');
 export const quickResolutionToggle = document.getElementById('quick-resolution-visible');
 export const quickResolutionContent = document.getElementById('quick-resolution-content');
+export const tripleModeToggle = document.getElementById('triple-mode-enabled');
 
 // Flat list of all clickable action buttons — used to disable/enable them as a group.
-export const actionButtons = [...qualityButtons, modeLowButton, modeHighButton].filter(
+export const actionButtons = [...qualityButtons, modeLowButton, modeMediumButton, modeHighButton].filter(
   (button) => button instanceof HTMLButtonElement
 );
 
@@ -46,6 +51,7 @@ export let statusResetTimer = null;   // handle for the pending auto-reset timer
 export let isRoundActive = false;     // true while an action is in flight
 export let isQuickResolutionVisible = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.QUICK_RESOLUTION_VISIBLE]);
 export let isPluginEnabled = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.PLUGIN_ENABLED]);
+export let isTripleModeEnabled = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.TRIPLE_MODE_ENABLED]);
 export let idleStatusType = STATUS_TYPES.SUCCESS;      // resting status type
 export let idleStatusMessage = READY_STATUS_MESSAGE;   // resting status text
 
@@ -131,6 +137,31 @@ export function setQuickResolutionVisibility(visible) {
     quickResolutionToggle.checked = nextVisible;
     // aria-expanded communicates the panel's open/closed state to screen readers.
     quickResolutionToggle.setAttribute('aria-expanded', String(nextVisible));
+  }
+}
+
+/** Syncs Triple Mode toggle: shows/hides the Balanced mode button + resolution row. */
+export function setTripleModeState(enabled) {
+  const nextEnabled = Boolean(enabled);
+  isTripleModeEnabled = nextEnabled;
+
+  // hidden attribute keeps the Balanced button out of the mode-toggle grid entirely
+  // (rather than just visually dimming it) so the 2-column layout is preserved when off.
+  if (modeMediumButton instanceof HTMLElement) {
+    modeMediumButton.hidden = !nextEnabled;
+  }
+  if (fastToggleMediumRow instanceof HTMLElement) {
+    fastToggleMediumRow.hidden = !nextEnabled;
+  }
+
+  // data-triple-active drives the CSS grid-template-columns switch on .mode-toggle.
+  if (modeToggleGroup instanceof HTMLElement) {
+    modeToggleGroup.dataset.tripleActive = String(nextEnabled);
+  }
+
+  if (tripleModeToggle instanceof HTMLInputElement) {
+    tripleModeToggle.checked = nextEnabled;
+    tripleModeToggle.setAttribute('aria-expanded', String(nextEnabled));
   }
 }
 

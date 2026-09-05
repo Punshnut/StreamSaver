@@ -8,9 +8,9 @@
  * loadSettings()     — reads all settings on popup open, hydrates all controls
  */
 
-import { SETTINGS_KEYS, DEFAULT_SETTINGS, STATUS_TYPES, POPUP_TIMINGS } from './constants.js';
-import { setActionButtonsDisabled, setStatus, isRoundActive, setQuickResolutionVisibility, setPluginEnabledState, fastToggleLow, fastToggleHigh } from './ui.js';
-import { sanitizeQualityValue, sanitizeModeValue, refreshModeHUD, setCurrentActiveMode } from './mode-quality.js';
+import { SETTINGS_KEYS, DEFAULT_SETTINGS, STATUS_TYPES, POPUP_TIMINGS, MODE_VALUES } from './constants.js';
+import { setActionButtonsDisabled, setStatus, isRoundActive, setQuickResolutionVisibility, setPluginEnabledState, setTripleModeState, fastToggleLow, fastToggleMedium, fastToggleHigh } from './ui.js';
+import { sanitizeQualityValue, sanitizeModeValue, sanitizeStandardModeValue, refreshModeHUD, setCurrentActiveMode, setLastStandardMode } from './mode-quality.js';
 import { probeIdleStatus } from './idle-status.js';
 
 /** Persists one settings key immediately in local extension storage. */
@@ -53,18 +53,34 @@ export async function loadSettings() {
     // Validate each value before applying — storage may contain corrupt data from
     // an older extension version or manual browser storage edits.
     const lowValue = sanitizeQualityValue(stored[SETTINGS_KEYS.LOW], DEFAULT_SETTINGS[SETTINGS_KEYS.LOW]);
+    const mediumValue = sanitizeQualityValue(stored[SETTINGS_KEYS.MEDIUM], DEFAULT_SETTINGS[SETTINGS_KEYS.MEDIUM]);
     const highValue = sanitizeQualityValue(stored[SETTINGS_KEYS.HIGH], DEFAULT_SETTINGS[SETTINGS_KEYS.HIGH]);
-    const activeMode = sanitizeModeValue(stored[SETTINGS_KEYS.ACTIVE_MODE], DEFAULT_SETTINGS[SETTINGS_KEYS.ACTIVE_MODE]);
+    let activeMode = sanitizeModeValue(stored[SETTINGS_KEYS.ACTIVE_MODE], DEFAULT_SETTINGS[SETTINGS_KEYS.ACTIVE_MODE]);
+    const lastStandardMode = sanitizeStandardModeValue(
+      stored[SETTINGS_KEYS.LAST_STANDARD_MODE],
+      DEFAULT_SETTINGS[SETTINGS_KEYS.LAST_STANDARD_MODE]
+    );
     // Boolean settings: use strict comparison to avoid treating null/undefined as false.
     const quickResolutionVisible = stored[SETTINGS_KEYS.QUICK_RESOLUTION_VISIBLE] === true;
     const pluginEnabled = stored[SETTINGS_KEYS.PLUGIN_ENABLED] !== false;
+    const tripleModeEnabled = stored[SETTINGS_KEYS.TRIPLE_MODE_ENABLED] === true;
+
+    // Defensive consistency check: Balanced mode can only be active while Triple Mode
+    // is enabled — fall back to the remembered standard mode if storage disagrees
+    // (e.g. edited out of band, or Triple Mode was turned off in another popup instance).
+    if (activeMode === MODE_VALUES.MEDIUM && !tripleModeEnabled) {
+      activeMode = lastStandardMode;
+    }
 
     // Hydrate all controls with the loaded values.
     fastToggleLow.value = lowValue;
+    fastToggleMedium.value = mediumValue;
     fastToggleHigh.value = highValue;
     setCurrentActiveMode(activeMode);
+    setLastStandardMode(lastStandardMode);
     setQuickResolutionVisibility(quickResolutionVisible);
     setPluginEnabledState(pluginEnabled);
+    setTripleModeState(tripleModeEnabled);
     refreshModeHUD();
 
     // Probe the active tab to set the correct idle status (ready / no stream / disabled).
@@ -73,10 +89,13 @@ export async function loadSettings() {
     // Storage read failed — apply defaults so the popup is still usable.
     console.error('[StreamSaver][popup] Failed to load settings:', error);
     fastToggleLow.value = DEFAULT_SETTINGS[SETTINGS_KEYS.LOW];
+    fastToggleMedium.value = DEFAULT_SETTINGS[SETTINGS_KEYS.MEDIUM];
     fastToggleHigh.value = DEFAULT_SETTINGS[SETTINGS_KEYS.HIGH];
     setCurrentActiveMode(DEFAULT_SETTINGS[SETTINGS_KEYS.ACTIVE_MODE]);
+    setLastStandardMode(DEFAULT_SETTINGS[SETTINGS_KEYS.LAST_STANDARD_MODE]);
     setQuickResolutionVisibility(DEFAULT_SETTINGS[SETTINGS_KEYS.QUICK_RESOLUTION_VISIBLE]);
     setPluginEnabledState(DEFAULT_SETTINGS[SETTINGS_KEYS.PLUGIN_ENABLED]);
+    setTripleModeState(DEFAULT_SETTINGS[SETTINGS_KEYS.TRIPLE_MODE_ENABLED]);
     refreshModeHUD();
     setStatus(STATUS_TYPES.ERROR, 'Failed to load settings. Using defaults.');
   } finally {

@@ -1,10 +1,13 @@
 /**
  * popup/mode-quality.js
  *
- * Handles the two-mode system (Travel / High Quality) and the quality button
- * interactions in the popup.
+ * Handles the mode system (Travel / Balanced / High Quality — Balanced only
+ * shown when Triple Mode is enabled) and the quality button interactions in
+ * the popup.
  *
  * currentActiveMode        — module-level variable for the active mode key
+ * lastStandardMode         — last Low/High mode pressed (never Balanced); used to
+ *                            fall back to a standard mode when Triple Mode is disabled
  * refreshModeHUD()         — syncs button states and summary text
  * handleQualityButtonClick() — dispatches a direct quality-set action
  * handleModeButtonClick()  — saves mode, applies its quality, updates HUD
@@ -12,7 +15,7 @@
 
 import { QUALITY_SET, MODE_SET, MODE_VALUES, MODE_LABELS, SETTINGS_KEYS, DEFAULT_SETTINGS, STATUS_TYPES, POPUP_TIMINGS } from './constants.js';
 import { resolveQuality } from '../shared/constants.js';
-import { isPluginEnabled, setStatus, popupRoot, modeLowButton, modeHighButton, modeSummaryEl, fastToggleLow, fastToggleHigh, setReleaseCallback } from './ui.js';
+import { isPluginEnabled, setStatus, popupRoot, modeLowButton, modeMediumButton, modeHighButton, modeSummaryEl, fastToggleLow, fastToggleMedium, fastToggleHigh, setReleaseCallback } from './ui.js';
 import { launchActionWithStatus, craftQualityRequest } from './messaging.js';
 import { saveSetting } from './settings.js';
 
@@ -23,6 +26,15 @@ export let currentActiveMode = DEFAULT_SETTINGS[SETTINGS_KEYS.ACTIVE_MODE];
 /** Updates the in-memory mode value (called by settings.js after storage load). */
 export function setCurrentActiveMode(value) {
   currentActiveMode = value;
+}
+
+// lastStandardMode remembers the last Low/High mode pressed (never Balanced), so
+// disabling Triple Mode while Balanced is active knows which mode to fall back to.
+export let lastStandardMode = DEFAULT_SETTINGS[SETTINGS_KEYS.LAST_STANDARD_MODE];
+
+/** Updates the in-memory last-standard-mode value. */
+export function setLastStandardMode(value) {
+  lastStandardMode = value;
 }
 
 // Register refreshModeHUD as the releaseControls callback to break the circular dep.
@@ -40,6 +52,11 @@ export function sanitizeModeValue(value, fallback) {
   return MODE_SET.has(value) ? value : fallback;
 }
 
+/** Normalizes to a "standard" (Low/High, never Balanced) mode value with fallback. */
+export function sanitizeStandardModeValue(value, fallback) {
+  return value === MODE_VALUES.LOW || value === MODE_VALUES.HIGH ? value : fallback;
+}
+
 /** Quick membership check for quality button and select input values. */
 export function isSupportedQuality(value) {
   return QUALITY_SET.has(value);
@@ -55,6 +72,7 @@ export function getModeLabel(mode) {
 export function readModeResolutions() {
   return {
     lowValue: sanitizeQualityValue(fastToggleLow.value, DEFAULT_SETTINGS[SETTINGS_KEYS.LOW]),
+    mediumValue: sanitizeQualityValue(fastToggleMedium.value, DEFAULT_SETTINGS[SETTINGS_KEYS.MEDIUM]),
     highValue: sanitizeQualityValue(fastToggleHigh.value, DEFAULT_SETTINGS[SETTINGS_KEYS.HIGH])
   };
 }
@@ -63,6 +81,7 @@ export function readModeResolutions() {
 export function refreshModeHUD() {
   const activeMode = sanitizeModeValue(currentActiveMode, MODE_VALUES.HIGH);
   const lowIsActive = activeMode === MODE_VALUES.LOW;
+  const mediumIsActive = activeMode === MODE_VALUES.MEDIUM;
   const highIsActive = activeMode === MODE_VALUES.HIGH;
 
   // data-active-mode drives CSS rules that style the active mode section.
@@ -72,10 +91,12 @@ export function refreshModeHUD() {
 
   // Toggle the visual active state on each mode button.
   modeLowButton.dataset.active = String(lowIsActive);
+  modeMediumButton.dataset.active = String(mediumIsActive);
   modeHighButton.dataset.active = String(highIsActive);
 
   // aria-pressed communicates toggle button state to screen readers.
   modeLowButton.setAttribute('aria-pressed', String(lowIsActive));
+  modeMediumButton.setAttribute('aria-pressed', String(mediumIsActive));
   modeHighButton.setAttribute('aria-pressed', String(highIsActive));
 
   // Plain-language summary for sighted users.
@@ -125,6 +146,13 @@ export async function handleModeButtonClick(mode) {
     return; // saveSetting already set an error status
   }
 
+  // Remember the last Low/High mode pressed (never Balanced) so Triple Mode can be
+  // switched off later and fall back to whatever standard mode the user last picked.
+  if (normalizedMode !== MODE_VALUES.MEDIUM) {
+    setLastStandardMode(normalizedMode);
+    saveSetting(SETTINGS_KEYS.LAST_STANDARD_MODE, normalizedMode); // fire-and-forget
+  }
+
   // If the plugin is off, save was still valuable (persists the preference) but
   // we shouldn't try to apply quality — tell the user explicitly.
   if (!isPluginEnabled) {
@@ -133,7 +161,8 @@ export async function handleModeButtonClick(mode) {
   }
 
   // Apply the mode's target quality immediately after switching.
-  const { lowValue, highValue } = readModeResolutions();
-  const targetQuality = normalizedMode === MODE_VALUES.LOW ? lowValue : highValue;
+  const { lowValue, mediumValue, highValue } = readModeResolutions();
+  const targetQuality =
+    normalizedMode === MODE_VALUES.LOW ? lowValue : normalizedMode === MODE_VALUES.MEDIUM ? mediumValue : highValue;
   launchActionWithStatus(craftQualityRequest(targetQuality), `Applying ${targetQuality} for ${getModeLabel(normalizedMode)}...`);
 }

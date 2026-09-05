@@ -23,6 +23,7 @@ import { MODE_VALUES } from '../shared/constants.js';
 
 export const MODE_LABELS = {
   [MODE_VALUES.LOW]: 'Travel / Data Saver',
+  [MODE_VALUES.MEDIUM]: 'Balanced',
   [MODE_VALUES.HIGH]: 'High Quality'
 };
 export const ACTION_NAMES = {
@@ -35,17 +36,23 @@ export const STATUS_TYPES = {
 };
 export const SETTINGS_KEYS = {
   LOW: 'fastToggleLow',
+  MEDIUM: 'fastToggleMedium',
   HIGH: 'fastToggleHigh',
   ACTIVE_MODE: 'activeMode',
   QUICK_RESOLUTION_VISIBLE: 'quickResolutionVisible',
-  PLUGIN_ENABLED: 'pluginEnabled'
+  PLUGIN_ENABLED: 'pluginEnabled',
+  TRIPLE_MODE_ENABLED: 'tripleModeEnabled',
+  LAST_STANDARD_MODE: 'lastStandardMode'
 };
 export const DEFAULT_SETTINGS = {
   [SETTINGS_KEYS.LOW]: '480p',
+  [SETTINGS_KEYS.MEDIUM]: '720p',
   [SETTINGS_KEYS.HIGH]: 'Source',
   [SETTINGS_KEYS.ACTIVE_MODE]: MODE_VALUES.HIGH,
   [SETTINGS_KEYS.QUICK_RESOLUTION_VISIBLE]: false,
-  [SETTINGS_KEYS.PLUGIN_ENABLED]: true
+  [SETTINGS_KEYS.PLUGIN_ENABLED]: true,
+  [SETTINGS_KEYS.TRIPLE_MODE_ENABLED]: false,
+  [SETTINGS_KEYS.LAST_STANDARD_MODE]: MODE_VALUES.HIGH
 };
 export const READY_STATUS_MESSAGE = 'Ready. Manage mode or switch resolutions manually.';
 export const DISABLED_STATUS_MESSAGE = 'Plugin logic is disabled. Settings are saved but Twitch quality is unchanged.';

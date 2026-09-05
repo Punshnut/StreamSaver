@@ -76,6 +76,24 @@ body {
   --busy-border: #8b4152;
 }
 
+/* Balanced mode palette */
+.popup[data-active-mode='medium'] {
+  --panel-border: #2f6a45;
+  --accent: #4ade80;
+  --accent-strong: #22c55e;
+  --accent-rgb: 83, 255, 140;
+  --focus-rgb: 34, 197, 94;
+  --hero-top: rgba(21, 71, 45, 0.84);
+  --hero-bottom: rgba(8, 28, 16, 0.95);
+  --mode-active-top: rgba(93, 255, 150, 0.3);
+  --mode-active-bottom: rgba(15, 59, 31, 0.98);
+  --mode-active-rgb: 83, 255, 120;
+  --summary-text: #bfffd0;
+  --row-label: #b7f0c6;
+  --busy: #c2ffd2;
+  --busy-border: #418b52;
+}
+
 /* Background grid */
 .bg-grid {
   position: absolute;
@@ -93,6 +111,12 @@ body {
   background-image:
     linear-gradient(rgba(222, 110, 137, 0.16) 1px, transparent 1px),
     linear-gradient(90deg, rgba(222, 110, 137, 0.14) 1px, transparent 1px);
+}
+
+.popup[data-active-mode='medium'] .bg-grid {
+  background-image:
+    linear-gradient(rgba(110, 222, 137, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(110, 222, 137, 0.14) 1px, transparent 1px);
 }
 
 /* Shared card surfaces */
@@ -320,6 +344,11 @@ body {
   background: linear-gradient(180deg, rgba(45, 18, 28, 0.95), rgba(26, 10, 16, 0.95));
 }
 
+.popup[data-active-mode='medium'] .inline-toggle input {
+  border-color: #326b45;
+  background: linear-gradient(180deg, rgba(18, 45, 28, 0.95), rgba(10, 26, 16, 0.95));
+}
+
 .mode-toggle,
 .quality-grid {
   display: grid;
@@ -328,6 +357,10 @@ body {
 
 .mode-toggle {
   grid-template-columns: 1fr 1fr;
+}
+
+.mode-toggle[data-triple-active='true'] {
+  grid-template-columns: repeat(3, 1fr);
 }
 
 .quality-grid {
@@ -357,6 +390,11 @@ select {
 .popup[data-active-mode='low'] button,
 .popup[data-active-mode='low'] select {
   border-color: #6b3945;
+}
+
+.popup[data-active-mode='medium'] button,
+.popup[data-active-mode='medium'] select {
+  border-color: #326b45;
 }
 
 button {
@@ -405,6 +443,10 @@ button:disabled:hover {
 
 .popup[data-active-mode='low'] button:disabled:hover {
   border-color: #6b3945;
+}
+
+.popup[data-active-mode='medium'] button:disabled:hover {
+  border-color: #326b45;
 }
 
 select:hover {
@@ -462,6 +504,10 @@ select {
   background: linear-gradient(180deg, rgba(45, 18, 28, 0.95), rgba(26, 10, 16, 0.95));
 }
 
+.popup[data-active-mode='medium'] select {
+  background: linear-gradient(180deg, rgba(18, 45, 28, 0.95), rgba(10, 26, 16, 0.95));
+}
+
 select option {
   background: #0e1a2d;
   color: #eaf4ff;
@@ -469,6 +515,10 @@ select option {
 
 .popup[data-active-mode='low'] select option {
   background: #281018;
+}
+
+.popup[data-active-mode='medium'] select option {
+  background: #102818;
 }
 
 /* Plugin toggle row */
@@ -568,6 +618,10 @@ select option {
 
 .popup[data-active-mode='low'] .status[data-state='loading'] {
   background: rgba(47, 18, 28, 0.9);
+}
+
+.popup[data-active-mode='medium'] .status[data-state='loading'] {
+  background: rgba(18, 47, 28, 0.9);
 }
 
 .status[data-state='success'] {

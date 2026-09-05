@@ -5,16 +5,18 @@
  *
  * Responsibilities:
  *   1. bindActionHandlers() — attaches click listeners to quality and mode buttons
- *   2. fastToggleLow/High change listeners — persist dropdown, apply quality if active
+ *   2. fastToggleLow/Medium/High change listeners — persist dropdown, apply quality if active
  *   3. pluginEnabledToggle change listener — save, probe status, apply quality if now enabled
  *   4. quickResolutionToggle change listener — show/hide panel, save preference
- *   5. Initial hydration — refreshModeHUD, setPluginEnabledState, setQuickResolutionVisibility,
+ *   5. tripleModeToggle change listener — show/hide Balanced controls, save preference,
+ *      fall back to the last standard mode if Balanced was active when turned off
+ *   6. Initial hydration — refreshModeHUD, setPluginEnabledState, setQuickResolutionVisibility,
  *      loadSettings (which also probes the active tab for idle status)
  */
 
 import { SETTINGS_KEYS, MODE_VALUES, DEFAULT_SETTINGS } from './constants.js';
-import { qualityButtons, modeLowButton, modeHighButton, pluginEnabledToggle, quickResolutionToggle, fastToggleLow, fastToggleHigh, isPluginEnabled, isQuickResolutionVisible, setQuickResolutionVisibility, setPluginEnabledState } from './ui.js';
-import { refreshModeHUD, handleQualityButtonClick, handleModeButtonClick, getModeLabel, readModeResolutions, currentActiveMode, sanitizeModeValue, sanitizeQualityValue, isSupportedQuality } from './mode-quality.js';
+import { qualityButtons, modeLowButton, modeMediumButton, modeHighButton, pluginEnabledToggle, quickResolutionToggle, tripleModeToggle, fastToggleLow, fastToggleMedium, fastToggleHigh, isPluginEnabled, isQuickResolutionVisible, isTripleModeEnabled, setQuickResolutionVisibility, setPluginEnabledState, setTripleModeState } from './ui.js';
+import { refreshModeHUD, handleQualityButtonClick, handleModeButtonClick, getModeLabel, readModeResolutions, currentActiveMode, lastStandardMode, sanitizeModeValue, sanitizeStandardModeValue, sanitizeQualityValue, isSupportedQuality } from './mode-quality.js';
 import { launchActionWithStatus, craftQualityRequest } from './messaging.js';
 import { loadSettings, saveSetting, handleSelectChange } from './settings.js';
 import { probeIdleStatus } from './idle-status.js';
@@ -32,6 +34,10 @@ function bindActionHandlers() {
     handleModeButtonClick(MODE_VALUES.LOW);
   });
 
+  modeMediumButton.addEventListener('click', () => {
+    handleModeButtonClick(MODE_VALUES.MEDIUM);
+  });
+
   modeHighButton.addEventListener('click', () => {
     handleModeButtonClick(MODE_VALUES.HIGH);
   });
@@ -44,6 +50,15 @@ fastToggleLow.addEventListener('change', () => {
   handleSelectChange(SETTINGS_KEYS.LOW, fastToggleLow);
   if (currentActiveMode === MODE_VALUES.LOW) {
     const quality = sanitizeQualityValue(fastToggleLow.value, DEFAULT_SETTINGS[SETTINGS_KEYS.LOW]);
+    launchActionWithStatus(craftQualityRequest(quality), `Applying ${quality}...`);
+  }
+});
+
+// ─── FastToggleMedium dropdown ─────────────────────────────────────────────────
+fastToggleMedium.addEventListener('change', () => {
+  handleSelectChange(SETTINGS_KEYS.MEDIUM, fastToggleMedium);
+  if (currentActiveMode === MODE_VALUES.MEDIUM) {
+    const quality = sanitizeQualityValue(fastToggleMedium.value, DEFAULT_SETTINGS[SETTINGS_KEYS.MEDIUM]);
     launchActionWithStatus(craftQualityRequest(quality), `Applying ${quality}...`);
   }
 });
@@ -88,9 +103,10 @@ if (pluginEnabledToggle instanceof HTMLInputElement) {
 
     // Plugin was just enabled — immediately apply the current mode's target quality
     // so the user doesn't have to click again.
-    const { lowValue, highValue } = readModeResolutions();
+    const { lowValue, mediumValue, highValue } = readModeResolutions();
     const activeMode = sanitizeModeValue(currentActiveMode, MODE_VALUES.HIGH);
-    const targetQuality = activeMode === MODE_VALUES.LOW ? lowValue : highValue;
+    const targetQuality =
+      activeMode === MODE_VALUES.LOW ? lowValue : activeMode === MODE_VALUES.MEDIUM ? mediumValue : highValue;
     launchActionWithStatus(craftQualityRequest(targetQuality), `Applying ${targetQuality} for ${getModeLabel(activeMode)}...`);
   });
 }
@@ -109,6 +125,31 @@ if (quickResolutionToggle instanceof HTMLInputElement) {
   });
 }
 
+// ─── Triple Mode toggle ────────────────────────────────────────────────────────
+// Controls whether the Balanced mode button + resolution row are shown at all.
+if (tripleModeToggle instanceof HTMLInputElement) {
+  tripleModeToggle.addEventListener('change', async () => {
+    const nextEnabled = tripleModeToggle.checked;
+
+    // Optimistically show/hide the Balanced controls so it feels instant.
+    setTripleModeState(nextEnabled);
+
+    await saveSetting(
+      SETTINGS_KEYS.TRIPLE_MODE_ENABLED,
+      nextEnabled,
+      nextEnabled ? 'Triple Mode enabled.' : 'Triple Mode disabled.'
+    );
+
+    // If Balanced was active when the user turned Triple Mode off, fall back to
+    // whichever standard (Low/High) mode was last pressed — Balanced can no
+    // longer be the active mode once its controls are hidden.
+    if (!nextEnabled && currentActiveMode === MODE_VALUES.MEDIUM) {
+      const fallbackMode = sanitizeStandardModeValue(lastStandardMode, MODE_VALUES.HIGH);
+      handleModeButtonClick(fallbackMode);
+    }
+  });
+}
+
 // ─── Initial hydration ────────────────────────────────────────────────────────
 // Run in order: bind handlers → refresh HUD → apply stored enabled/visibility state
 // → load full settings from storage (which also probes the active tab).
@@ -116,4 +157,5 @@ bindActionHandlers();
 refreshModeHUD();
 setPluginEnabledState(isPluginEnabled);
 setQuickResolutionVisibility(isQuickResolutionVisible);
+setTripleModeState(isTripleModeEnabled);
 loadSettings();

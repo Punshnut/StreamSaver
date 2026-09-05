@@ -9,13 +9,13 @@
  *   and message handler to bail out early if the user has disabled the plugin.
  *
  * loadModeSettingsForEnforcement()
- *   Reads all four mode settings in one storage call and validates each value
+ *   Reads all mode settings in one storage call and validates each value
  *   against known-good sets, falling back to defaults for any corrupt entry.
  *
  * aimQualityForMode(modeSettings)
- *   Pure function: given the four mode settings, returns the target quality
- *   string that should be active right now (fastToggleLow vs fastToggleHigh
- *   depending on activeMode).
+ *   Pure function: given the mode settings, returns the target quality
+ *   string that should be active right now (fastToggleLow / fastToggleMedium /
+ *   fastToggleHigh depending on activeMode).
  */
 
 import { STORAGE_KEYS, DEFAULT_MODE_SETTINGS, MODE_VALUES } from './constants.js';
@@ -51,6 +51,8 @@ export async function loadModeSettingsForEnforcement() {
     const pluginEnabled = validatePluginEnabled(stored[STORAGE_KEYS.PLUGIN_ENABLED]);
     const activeMode = validateMode(stored[STORAGE_KEYS.ACTIVE_MODE]);
     const fastToggleLow = validateQuality(stored[STORAGE_KEYS.FAST_TOGGLE_LOW]) || DEFAULT_MODE_SETTINGS[STORAGE_KEYS.FAST_TOGGLE_LOW];
+    const fastToggleMedium =
+      validateQuality(stored[STORAGE_KEYS.FAST_TOGGLE_MEDIUM]) || DEFAULT_MODE_SETTINGS[STORAGE_KEYS.FAST_TOGGLE_MEDIUM];
     const fastToggleHigh =
       validateQuality(stored[STORAGE_KEYS.FAST_TOGGLE_HIGH]) || DEFAULT_MODE_SETTINGS[STORAGE_KEYS.FAST_TOGGLE_HIGH];
 
@@ -58,6 +60,7 @@ export async function loadModeSettingsForEnforcement() {
       pluginEnabled,
       activeMode,
       fastToggleLow,
+      fastToggleMedium,
       fastToggleHigh
     });
   } catch (error) {
@@ -76,15 +79,18 @@ export function aimQualityForMode(modeSettings) {
   const pluginEnabled = validatePluginEnabled(modeSettings?.pluginEnabled);
   const activeMode = validateMode(modeSettings?.activeMode);
   const fastToggleLow = validateQuality(modeSettings?.fastToggleLow) || DEFAULT_MODE_SETTINGS[STORAGE_KEYS.FAST_TOGGLE_LOW];
+  const fastToggleMedium = validateQuality(modeSettings?.fastToggleMedium) || DEFAULT_MODE_SETTINGS[STORAGE_KEYS.FAST_TOGGLE_MEDIUM];
   const fastToggleHigh = validateQuality(modeSettings?.fastToggleHigh) || DEFAULT_MODE_SETTINGS[STORAGE_KEYS.FAST_TOGGLE_HIGH];
 
   // The active mode selects which quality preset to target.
-  const targetQuality = activeMode === MODE_VALUES.LOW ? fastToggleLow : fastToggleHigh;
+  const targetQuality =
+    activeMode === MODE_VALUES.LOW ? fastToggleLow : activeMode === MODE_VALUES.MEDIUM ? fastToggleMedium : fastToggleHigh;
 
   return {
     pluginEnabled,
     activeMode,
     fastToggleLow,
+    fastToggleMedium,
     fastToggleHigh,
     targetQuality
   };
