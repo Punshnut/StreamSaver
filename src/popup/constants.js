@@ -22,7 +22,7 @@ export { QUALITY_VALUES, QUALITY_SET, MODE_VALUES, MODE_SET, resolveQuality } fr
 import { MODE_VALUES } from '../shared/constants.js';
 
 export const MODE_LABELS = {
-  [MODE_VALUES.LOW]: 'Travel / Data Saver',
+  [MODE_VALUES.LOW]: 'Data Saver',
   [MODE_VALUES.MEDIUM]: 'Balanced',
   [MODE_VALUES.HIGH]: 'High Quality'
 };

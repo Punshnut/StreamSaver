@@ -25,7 +25,7 @@ Built for Chrome, Edge, Brave, Opera, Vivaldi, Arc, Zen, and Firefox.
 Switch quality from `160p` to `2160p` or `Source` directly in the popup.
 
 ### Two-Speed Streaming Modes
-Set **High Quality** and **Travel / Data Saver** presets once, then toggle between them anytime.
+Set **High Quality** and **Data Saver** presets once, then toggle between them anytime.
 
 ### Smart Auto Re-Apply
 StreamSaver keeps your selected mode aligned on Twitch live pages when navigation or tab state changes.
@@ -53,7 +53,7 @@ Built for Twitch UI Reality, Not Ideal Conditions
 
 1. Open StreamSaver from your browser toolbar.
 2. Choose your **Low** and **High** target resolutions.
-3. Toggle between **Travel / Data Saver** and **High Quality** modes.
+3. Toggle between **Data Saver** and **High Quality** modes.
 4. StreamSaver applies your target and keeps it in sync on supported Twitch live pages.
 
 ---

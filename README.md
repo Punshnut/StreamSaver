@@ -40,7 +40,7 @@ Firefox requires a signed extension file (`.xpi`). Download the latest `streamsa
 ## What It Does
 
 - One-click quality switching from the popup
-- Two persistent modes: `High Quality` and `Travel / Data Saver`
+- Two persistent modes: `High Quality` and `Data Saver`
 - Auto re-apply of your selected mode on Twitch live pages without interrupting your viewing
 - Settings are saved in `chrome.storage.local`
 
@@ -49,7 +49,7 @@ Firefox requires a signed extension file (`.xpi`). Download the latest `streamsa
 Use StreamSaver like a two-speed mode for Twitch:
 
 - `High Quality` (`1080p`/`Source`) for home and work
-- `Travel / Data Saver` (`360p`/`480p`) for hotspot, background streams, gaming, or second-monitor use
+- `Data Saver` (`360p`/`480p`) for hotspot, background streams, gaming, or second-monitor use
 
 Switch with one click as your network changes, and StreamSaver keeps your preference consistent across live pages.
 

@@ -1,7 +1,7 @@
 /**
  * popup/mode-quality.js
  *
- * Handles the mode system (Travel / Balanced / High Quality — Balanced only
+ * Handles the mode system (Data Saver / Balanced / High Quality — Balanced only
  * shown when Triple Mode is enabled) and the quality button interactions in
  * the popup.
  *

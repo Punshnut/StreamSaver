@@ -458,6 +458,9 @@ select:hover {
 .mode-btn {
   min-height: 40px;
   font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mode-btn[data-active='true'] {
@@ -478,10 +481,14 @@ select:hover {
 /* Resolution form rows */
 .row {
   display: grid;
-  grid-template-columns: 48px 1fr;
+  grid-template-columns: 62px 1fr;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   margin-bottom: 8px;
+}
+
+.row[hidden] {
+  display: none;
 }
 
 .row label {
@@ -489,11 +496,12 @@ select:hover {
   color: var(--row-label);
   font-weight: 600;
   letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 select {
   height: 32px;
-  padding: 0 8px;
+  padding: 0 6px;
   font-family: inherit;
   font-size: 12px;
   color: var(--text);

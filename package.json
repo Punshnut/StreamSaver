@@ -1,6 +1,6 @@
 {
   "name": "streamsaver",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "Lightweight, persistent Twitch quality control: lock resolutions, toggle presets, auto-reapply. No more manual resets - across Chrome, Edge, Brave, Opera, Vivaldi, Arc, Zen, and Firefox",
   "main": "src/content/main.js",
   "scripts": {
