@@ -35,6 +35,7 @@ export const fastToggleLow = document.getElementById('fastToggleLow');
 export const fastToggleMedium = document.getElementById('fastToggleMedium');
 export const fastToggleHigh = document.getElementById('fastToggleHigh');
 export const fastToggleMediumRow = document.getElementById('fastToggleMediumRow');
+export const fastToggleMediumWrap = document.getElementById('fastToggleMediumWrap');
 export const pluginEnabledToggle = document.getElementById('plugin-enabled');
 export const pluginEnabledLabel = document.getElementById('plugin-enabled-label');
 export const quickResolutionToggle = document.getElementById('quick-resolution-visible');
@@ -122,15 +123,39 @@ export function releaseControls() {
   onActionComplete();
 }
 
+// Matches the CSS transition durations on .collapsible / .fade-toggle (styles.css)
+// so `hidden` is only applied once the close animation has actually finished.
+const COLLAPSE_TRANSITION_MS = 260;
+
+/** Animates an element between shown/hidden using its `data-open` CSS transition,
+ *  instead of snapping `hidden` on/off instantly. Works for both the grid-rows
+ *  collapse technique (.collapsible) and the opacity/scale fade (.fade-toggle). */
+export function setCollapsed(el, open) {
+  if (!(el instanceof HTMLElement)) return;
+  const nextOpen = Boolean(open);
+
+  if (nextOpen) {
+    // Remove hidden first so the element is back in layout, then flip data-open
+    // on the next frame so the browser has a "closed" state to transition from.
+    el.hidden = false;
+    requestAnimationFrame(() => {
+      el.dataset.open = 'true';
+    });
+  } else {
+    el.dataset.open = 'false';
+    setTimeout(() => {
+      // Guard against a rapid re-open cancelling this stale timeout's effect.
+      if (el.dataset.open === 'false') el.hidden = true;
+    }, COLLAPSE_TRANSITION_MS);
+  }
+}
+
 /** Syncs Quick Resolution panel visibility and ARIA state. */
 export function setQuickResolutionVisibility(visible) {
   const nextVisible = Boolean(visible);
   isQuickResolutionVisible = nextVisible;
 
-  // hidden attribute controls layout — avoids CSS visibility quirks.
-  if (quickResolutionContent instanceof HTMLElement) {
-    quickResolutionContent.hidden = !nextVisible;
-  }
+  setCollapsed(quickResolutionContent, nextVisible);
 
   // Keep the toggle input in sync with the actual state.
   if (quickResolutionToggle instanceof HTMLInputElement) {
@@ -145,14 +170,11 @@ export function setTripleModeState(enabled) {
   const nextEnabled = Boolean(enabled);
   isTripleModeEnabled = nextEnabled;
 
-  // hidden attribute keeps the Balanced button out of the mode-toggle grid entirely
-  // (rather than just visually dimming it) so the 2-column layout is preserved when off.
-  if (modeMediumButton instanceof HTMLElement) {
-    modeMediumButton.hidden = !nextEnabled;
-  }
-  if (fastToggleMediumRow instanceof HTMLElement) {
-    fastToggleMediumRow.hidden = !nextEnabled;
-  }
+  // Animated show/hide — keeps the Balanced button and resolution row out of the
+  // layout when closed (rather than just visually dimming them) so the 2-column
+  // mode-toggle layout is preserved when off, but fades/collapses instead of snapping.
+  setCollapsed(modeMediumButton, nextEnabled);
+  setCollapsed(fastToggleMediumWrap, nextEnabled);
 
   // data-triple-active drives the CSS grid-template-columns switch on .mode-toggle.
   if (modeToggleGroup instanceof HTMLElement) {
