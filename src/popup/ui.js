@@ -129,8 +129,12 @@ const COLLAPSE_TRANSITION_MS = 260;
 
 /** Animates an element between shown/hidden using its `data-open` CSS transition,
  *  instead of snapping `hidden` on/off instantly. Works for both the grid-rows
- *  collapse technique (.collapsible) and the opacity/scale fade (.fade-toggle). */
-export function setCollapsed(el, open) {
+ *  collapse technique (.collapsible) and the opacity/scale fade (.fade-toggle).
+ *  `onSettled`, if given, fires once the element has reached its final state
+ *  (immediately after unhiding on open; after `hidden` is applied on close) —
+ *  use it to defer layout changes (like a parent grid resizing) until the
+ *  element has actually left the flow, so it doesn't wrap/jump mid-fade. */
+export function setCollapsed(el, open, onSettled) {
   if (!(el instanceof HTMLElement)) return;
   const nextOpen = Boolean(open);
 
@@ -140,12 +144,16 @@ export function setCollapsed(el, open) {
     el.hidden = false;
     requestAnimationFrame(() => {
       el.dataset.open = 'true';
+      if (onSettled) onSettled();
     });
   } else {
     el.dataset.open = 'false';
     setTimeout(() => {
       // Guard against a rapid re-open cancelling this stale timeout's effect.
-      if (el.dataset.open === 'false') el.hidden = true;
+      if (el.dataset.open === 'false') {
+        el.hidden = true;
+        if (onSettled) onSettled();
+      }
     }, COLLAPSE_TRANSITION_MS);
   }
 }
@@ -173,13 +181,25 @@ export function setTripleModeState(enabled) {
   // Animated show/hide — keeps the Balanced button and resolution row out of the
   // layout when closed (rather than just visually dimming them) so the 2-column
   // mode-toggle layout is preserved when off, but fades/collapses instead of snapping.
-  setCollapsed(modeMediumButton, nextEnabled);
-  setCollapsed(fastToggleMediumWrap, nextEnabled);
-
-  // data-triple-active drives the CSS grid-template-columns switch on .mode-toggle.
-  if (modeToggleGroup instanceof HTMLElement) {
-    modeToggleGroup.dataset.tripleActive = String(nextEnabled);
+  //
+  // The grid-template-columns switch on .mode-toggle (2 <-> 3 cols) must not run
+  // while the Balanced button is still occupying a cell in the *other* column
+  // count, or it wraps onto its own line for a frame before the resize animates.
+  // So: widen to 3 columns immediately when opening (button fades in already in
+  // its final track), but only narrow to 2 columns once the button has actually
+  // left the flow (`hidden`) when closing.
+  const setTripleColumns = () => {
+    if (modeToggleGroup instanceof HTMLElement) {
+      modeToggleGroup.dataset.tripleActive = String(nextEnabled);
+    }
+  };
+  if (nextEnabled) {
+    setTripleColumns();
+    setCollapsed(modeMediumButton, true);
+  } else {
+    setCollapsed(modeMediumButton, false, setTripleColumns);
   }
+  setCollapsed(fastToggleMediumWrap, nextEnabled);
 
   if (tripleModeToggle instanceof HTMLInputElement) {
     tripleModeToggle.checked = nextEnabled;
