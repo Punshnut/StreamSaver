@@ -15,7 +15,7 @@
 
 import { QUALITY_SET, MODE_SET, MODE_VALUES, MODE_LABELS, SETTINGS_KEYS, DEFAULT_SETTINGS, STATUS_TYPES, POPUP_TIMINGS } from './constants.js';
 import { resolveQuality } from '../shared/constants.js';
-import { isPluginEnabled, setStatus, popupRoot, modeLowButton, modeMediumButton, modeHighButton, modeSummaryEl, fastToggleLow, fastToggleMedium, fastToggleHigh, setReleaseCallback } from './ui.js';
+import { isPluginEnabled, setStatus, popupRoot, modeLowButton, modeMediumButton, modeHighButton, fastToggleLow, fastToggleMedium, fastToggleHigh, setReleaseCallback } from './ui.js';
 import { launchActionWithStatus, craftQualityRequest } from './messaging.js';
 import { saveSetting } from './settings.js';
 
@@ -98,9 +98,6 @@ export function refreshModeHUD() {
   modeLowButton.setAttribute('aria-pressed', String(lowIsActive));
   modeMediumButton.setAttribute('aria-pressed', String(mediumIsActive));
   modeHighButton.setAttribute('aria-pressed', String(highIsActive));
-
-  // Plain-language summary for sighted users.
-  modeSummaryEl.textContent = `Current mode: ${getModeLabel(activeMode)}`;
 }
 
 // Register the callback now that refreshModeHUD is defined.

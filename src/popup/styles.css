@@ -15,7 +15,7 @@
   /* Single shared duration for anything that recolors on mode switch — border,
      background and text must all move in lockstep or the mismatch reads as a
      flash/fragment where one edge finishes before the surface it sits on. */
-  --mode-transition: 240ms;
+  --mode-transition: 500ms;
 }
 
 * {
@@ -476,13 +476,6 @@ select:hover {
   color: #edfbff;
   font-weight: 700;
   box-shadow: 0 0 0 1px rgba(var(--mode-active-rgb), 0.22), inset 0 0 18px rgba(var(--mode-active-rgb), 0.18);
-}
-
-.mode-summary {
-  margin: 8px 0 0;
-  color: var(--summary-text);
-  font-size: 12px;
-  overflow-wrap: anywhere;
 }
 
 /* Collapse/expand animation helpers */

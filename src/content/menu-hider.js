@@ -62,10 +62,114 @@ export function deployMenuShield() {
   document.head.appendChild(style);
 }
 
+/** True when the tab is both visible and actually focused — the only state in
+ *  which a body click is safe, and the only state in which a stuck menu is
+ *  actually visible to the user (so it's the only state where giving up early
+ *  on removing the hider is dangerous). */
+function isTabFocused() {
+  return document.visibilityState === 'visible' && document.hasFocus();
+}
+
 /**
- * Decrements the hider ref-count and, once it reaches zero, polls until menus are
- * confirmed gone before removing the style. This ensures a lingering or stuck menu is
- * never revealed to the user when the hider lifts. Hard timeout: 800 ms.
+ * Repeatedly sweeps for open menus, polling between rounds, until either the
+ * menus are confirmed gone (returns true) or `rounds` attempts are exhausted
+ * (returns false). Re-checks `hiderRefCount` between rounds so a concurrent
+ * automation call that re-acquires the shield takes over cleanly.
+ */
+async function attemptMenuClose({ allowBodyClick, rounds, pollMs = 400 }) {
+  for (let round = 0; round < rounds; round += 1) {
+    if (hiderRefCount > 0) return false; // a new call re-acquired the shield — not ours to decide anymore
+
+    if (scanMenuRoots().length > 0) {
+      await sweepMenus({ allowBodyClick, aggressiveBodyClicks: true, maxAttempts: 2 });
+    }
+
+    const deadline = Date.now() + pollMs;
+    while (Date.now() < deadline) {
+      if (hiderRefCount > 0) return false;
+      if (scanMenuRoots().length === 0) return true;
+      await wait(60);
+    }
+  }
+
+  return hiderRefCount > 0 ? false : scanMenuRoots().length === 0;
+}
+
+/**
+ * Once the ref-count has hit zero, this is the single decision point for
+ * whether the hider style can safely be removed. It never removes it while a
+ * menu is confirmed open — instead it keeps retrying (focused case: bounded,
+ * short-interval retries; unfocused case: wait for the `focus` event, since
+ * the user can't see anything until then) until either the menu closes or a
+ * newer automation call takes ownership of the shield.
+ *  `attemptsSoFar` bounds the focused retry loop so a genuinely broken close
+ *  path (e.g. Twitch DOM changed) can't spin forever — after enough focused
+ *  attempts it logs and removes the hider as an absolute last resort, since
+ *  otherwise it would also end up permanently hiding menus the user opens
+ *  manually later.
+ */
+async function resolveHiderRemoval(attemptsSoFar = 0) {
+  if (hiderRefCount > 0) return; // a newer automation call owns the shield now
+
+  if (scanMenuRoots().length === 0) {
+    debug('menuHider: hide (menus confirmed closed)', { t: Date.now(), attemptsSoFar });
+    document.getElementById('streamsaver-menu-hider')?.remove();
+    return;
+  }
+
+  if (!isTabFocused()) {
+    // Tab isn't visible/focused — the user can't see a stuck menu right now,
+    // so there's nothing urgent to retry. Wait for focus to actually return
+    // (e.g. the popup closing, or switching back to the tab) before checking again.
+    debug('menuHider: deferring hider removal — unfocused with menus still open', { t: Date.now() });
+    window.addEventListener('focus', () => {
+      (async () => {
+        if (hiderRefCount > 0) return;
+        await wait(150); // brief settle before sweeping
+        // Focus is confirmed now, so a body click is safe (sweepMenus double-checks
+        // focus itself right before dispatching one, as extra insurance).
+        await attemptMenuClose({ allowBodyClick: true, rounds: 3 });
+        await resolveHiderRemoval(0);
+      })().catch(() => {});
+    }, { once: true });
+    return;
+  }
+
+  // Focused: the user could see a stuck menu right now, so retry for real
+  // (body clicks allowed) instead of giving up after a single pass.
+  const closed = await attemptMenuClose({ allowBodyClick: true, rounds: 3 });
+  if (hiderRefCount > 0) return;
+  if (closed) {
+    debug('menuHider: hide (closed via focused retry)', { t: Date.now() });
+    document.getElementById('streamsaver-menu-hider')?.remove();
+    return;
+  }
+
+  const nextAttempts = attemptsSoFar + 1;
+  const MAX_FOCUSED_ATTEMPTS = 8; // ~8 rounds of retries (several seconds of backoff) before giving up
+
+  if (nextAttempts >= MAX_FOCUSED_ATTEMPTS) {
+    debug('menuHider: menu still open after exhausting focused retries — revealing as last resort', {
+      t: Date.now(),
+      nextAttempts
+    });
+    document.getElementById('streamsaver-menu-hider')?.remove();
+    return;
+  }
+
+  debug('menuHider: menu still open after focused retry round; scheduling another attempt', {
+    t: Date.now(),
+    nextAttempts
+  });
+  setTimeout(() => { resolveHiderRemoval(nextAttempts).catch(() => {}); }, 1000);
+}
+
+/**
+ * Decrements the hider ref-count and, once it reaches zero, verifies menus are
+ * actually gone before removing the style — retrying with escalating rounds
+ * rather than giving up after a single pass. This ensures a lingering or stuck
+ * menu is never revealed to the user when the hider lifts, whether the tab is
+ * focused right now or regains focus later (e.g. the popup closing).
  */
 export async function liftMenuShield() {
   hiderRefCount = Math.max(0, hiderRefCount - 1);
@@ -73,53 +177,5 @@ export async function liftMenuShield() {
   // Other callers still hold the shield — don't remove the style yet.
   if (hiderRefCount > 0) return;
 
-  // If menus are still open, make one extra close attempt. pointer-events:none is still
-  // active here, so document.elementFromPoint() sees through the invisible menu to the
-  // player — this is the path that was failing at channel-join time.
-  // Only allow a player-area body click when the window is actually focused;
-  // an unfocused body click lands on Twitch's play/pause overlay and toggles
-  // VOD/stream playback state.
-  if (scanMenuRoots().length > 0) {
-    const canBodyClick = document.visibilityState === 'visible' && document.hasFocus();
-    await sweepMenus({ allowBodyClick: canBodyClick, aggressiveBodyClicks: true, maxAttempts: 2 });
-  }
-
-  // Poll briefly to confirm menus are gone before lifting the hider.
-  // We don't want to reveal a partially-closed menu to the user.
-  const deadline = Date.now() + 400;
-  while (Date.now() < deadline) {
-    if (hiderRefCount > 0) return; // a new automation call re-acquired the shield
-    if (scanMenuRoots().length === 0) break; // menus are gone — safe to lift
-    await wait(60);
-  }
-
-  // Re-check after the poll loop — a concurrent call may have bumped the count.
-  if (hiderRefCount > 0) return;
-
-  // Edge case: window lost focus while we were waiting. Keep the hider CSS active
-  // so the user never sees a stuck quality menu when they tab back in.
-  // Schedule a safe cleanup pass (no body click) for when focus returns.
-  if (scanMenuRoots().length > 0 && (!document.hasFocus() || document.visibilityState !== 'visible')) {
-    debug('menuHider: deferring hider removal — unfocused with menus still open', { t: Date.now() });
-    const onFocus = async () => {
-      if (hiderRefCount > 0) return; // a new automation took ownership — let it manage the hider
-      await wait(150); // brief settle before sweeping
-      await sweepMenus({ allowBodyClick: false, aggressiveBodyClicks: true, maxAttempts: 3 });
-      const deadline = Date.now() + 400;
-      while (Date.now() < deadline) {
-        if (hiderRefCount > 0) return;
-        if (scanMenuRoots().length === 0) break;
-        await wait(60);
-      }
-      if (hiderRefCount > 0) return;
-      debug('menuHider: hide (deferred, on focus)', { t: Date.now() });
-      document.getElementById('streamsaver-menu-hider')?.remove();
-    };
-    // { once: true } ensures the handler removes itself after firing.
-    window.addEventListener('focus', () => { onFocus().catch(() => {}); }, { once: true });
-    return;
-  }
-
-  debug('menuHider: hide (lock lifted)', { t: Date.now() });
-  document.getElementById('streamsaver-menu-hider')?.remove();
+  await resolveHiderRemoval(0);
 }

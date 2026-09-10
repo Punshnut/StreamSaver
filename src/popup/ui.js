@@ -29,7 +29,6 @@ export const modeLowButton = document.getElementById('mode-low-btn');
 export const modeMediumButton = document.getElementById('mode-medium-btn');
 export const modeHighButton = document.getElementById('mode-high-btn');
 export const modeToggleGroup = document.querySelector('.mode-toggle');
-export const modeSummaryEl = document.getElementById('mode-summary');
 export const qualityButtons = Array.from(document.querySelectorAll('.quality-btn'));
 export const fastToggleLow = document.getElementById('fastToggleLow');
 export const fastToggleMedium = document.getElementById('fastToggleMedium');
