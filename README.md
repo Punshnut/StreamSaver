@@ -8,7 +8,7 @@ Lightweight, persistent Twitch quality control: lock resolutions, toggle presets
 
 <p align="center">
   <img src="https://img.shields.io/badge/browser%20extension-8A2BE2" alt="Browser extension">
-  <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT">
+  <img src="https://img.shields.io/badge/License-AGPL%20v3-blue.svg" alt="License: AGPL-3.0">
 </p>
 
 <p align="center">
@@ -80,6 +80,10 @@ StreamSaver only activates on Twitch pages. Its content script runs exclusively 
   <tr><td>☕ <strong>Support</strong></td><td><a href="https://ko-fi.com/janfeuerbacher">Ko-Fi</a></td></tr>
   <tr><td>🔧 <strong>Build</strong></td><td><a href="docs/building.md">docs/building.md</a></td></tr>
 </table>
+
+## License
+
+As of 2026-09-11, StreamSaver is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE). Versions released prior to that date remain available under the original MIT license, which cannot be retroactively revoked.
 
 ## Disclaimer
 

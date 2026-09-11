@@ -166,4 +166,4 @@ Made for Twitch viewers who want fast, practical quality control.
 
 Support the project on Ko-fi: https://ko-fi.com/janfeuerbacher
 
-License: MIT
+License: AGPL-3.0 (versions released before 2026-09-11 remain under MIT)
