@@ -472,7 +472,7 @@ select:hover {
 
 .mode-btn[data-active='true'] {
   border-color: var(--accent-strong);
-  background: linear-gradient(120deg, var(--mode-active-top), var(--mode-active-bottom));
+  background: linear-gradient(180deg, var(--mode-active-top), var(--mode-active-bottom));
   color: #edfbff;
   font-weight: 700;
   box-shadow: 0 0 0 1px rgba(var(--mode-active-rgb), 0.22), inset 0 0 18px rgba(var(--mode-active-rgb), 0.18);
@@ -565,7 +565,7 @@ select option {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-top: 2px;
+  margin-top: 8px;
   padding: 8px 10px;
   border: 1px solid rgba(var(--accent-rgb), 0.34);
   border-radius: 9px;
