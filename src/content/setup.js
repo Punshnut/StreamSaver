@@ -157,6 +157,9 @@ export function bootEnforcementLoop() {
       fromUrl,
       toUrl: previousUrl
     });
+    // A new channel is a fresh context — don't carry over a manual quick-quality
+    // pick made for the previous stream; fall back to the configured mode.
+    missionState.manualOverrideQuality = null;
     // Force:true — the new channel may have a different quality state.
     queueEnforcementRound('spa-navigation', {
       force: true,

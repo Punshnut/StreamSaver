@@ -250,6 +250,13 @@ export async function runEnforcementRound(triggerReason = 'unknown', options = {
     debug('quality enforcement: active mode loaded', modeSettingsResult.details);
 
     const resolvedTarget = aimQualityForMode(modeSettingsResult.details);
+    // A sticky per-tab manual override (quick-resolution button) takes precedence
+    // over the mode-derived target until cleared by a mode change directed at this
+    // tab or a channel navigation — otherwise the next enforcement trigger would
+    // silently overwrite the user's manual pick with the global mode setting.
+    if (missionState.manualOverrideQuality) {
+      resolvedTarget.targetQuality = missionState.manualOverrideQuality;
+    }
     debug('quality enforcement: desired target quality resolved', resolvedTarget);
 
     // Re-check fullscreen: the user may have entered fullscreen during the async
@@ -389,9 +396,17 @@ export async function runEnforcementRound(triggerReason = 'unknown', options = {
         targetQuality: resolvedTarget.targetQuality,
         resultCode: automationResponse.details?.resultCode
       });
-      // Record what we just confirmed so the trust TTL cache is primed.
-      missionState.lockedQuality = resolvedTarget.targetQuality;
-      missionState.lastConfirmedQualityAtMs = Date.now();
+      // Record what was actually applied, not what we asked for — a boundary
+      // fallback (resolutionAdjustment.applied) means the real target wasn't
+      // reached, so the trust cache must not claim it was confirmed. Skip
+      // priming lastConfirmedQualityAtMs in that case so the next trigger
+      // retries at the normal cooldown cadence instead of trusting the wrong
+      // quality for the full trust TTL window.
+      const appliedQuality = automationResponse.details?.appliedQuality || resolvedTarget.targetQuality;
+      missionState.lockedQuality = appliedQuality;
+      if (!automationResponse.details?.resolutionAdjustment?.applied) {
+        missionState.lastConfirmedQualityAtMs = Date.now();
+      }
     } else {
       debug('quality enforcement: automation failed', {
         message: automationResponse.message,

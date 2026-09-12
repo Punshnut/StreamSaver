@@ -105,6 +105,7 @@ export const missionState = {
   forcePendingAfterFocus: false, // force enforcement was blocked by focus-loss; re-fire on next focus
   userMenuOpen: false,           // user has a player menu open; enforcement is paused
   userMenuForcePending: false,   // a force-enforcement was blocked by userMenuOpen; replay on menu close
+  manualOverrideQuality: null,   // sticky per-tab quick-quality pick; takes precedence over mode-derived target until cleared
 };
 
 export const arenaState = {

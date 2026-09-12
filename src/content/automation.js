@@ -27,7 +27,7 @@
  *   checks plugin-enabled state, then delegates to runQualityMission().
  */
 
-import { SETTINGS_MENU_DEBUG_MODE } from './constants.js';
+import { SETTINGS_MENU_DEBUG_MODE, missionState } from './constants.js';
 import { debug, createResult, wait } from './utils.js';
 import { forgeResponse, validateQuality } from './page-support.js';
 import { isAdLive } from './ad-detection.js';
@@ -334,6 +334,20 @@ export async function routeQualityRequest(targetQuality, pageSupport, manualOver
         });
       }
     }
-    return runQualityMission(targetQuality, pageSupport, 'setQuality');
+    const response = await runQualityMission(targetQuality, pageSupport, 'setQuality');
+
+    // Track sticky per-tab manual overrides so mode-driven enforcement in this
+    // tab (or a mode change made from another tab) doesn't silently clobber a
+    // quick-resolution-button pick. A non-manual request (mode applied directly
+    // to this tab, since the popup only messages the active tab) clears it.
+    if (response.ok) {
+      if (manualOverride) {
+        missionState.manualOverrideQuality = response.details?.appliedQuality || targetQuality;
+      } else {
+        missionState.manualOverrideQuality = null;
+      }
+    }
+
+    return response;
   });
 }
