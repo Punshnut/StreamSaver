@@ -9,7 +9,7 @@
  */
 
 import { SETTINGS_KEYS, DEFAULT_SETTINGS, STATUS_TYPES, POPUP_TIMINGS, MODE_VALUES } from './constants.js';
-import { setActionButtonsDisabled, setStatus, isRoundActive, setQuickResolutionVisibility, setPluginEnabledState, setTripleModeState, fastToggleLow, fastToggleMedium, fastToggleHigh } from './ui.js';
+import { setActionButtonsDisabled, setStatus, isRoundActive, setQuickResolutionVisibility, setPluginEnabledState, setTripleModeState, setAggressiveModeState, fastToggleLow, fastToggleMedium, fastToggleHigh } from './ui.js';
 import { sanitizeQualityValue, sanitizeModeValue, sanitizeStandardModeValue, refreshModeHUD, setCurrentActiveMode, setLastStandardMode } from './mode-quality.js';
 import { probeIdleStatus } from './idle-status.js';
 
@@ -64,6 +64,7 @@ export async function loadSettings() {
     const quickResolutionVisible = stored[SETTINGS_KEYS.QUICK_RESOLUTION_VISIBLE] === true;
     const pluginEnabled = stored[SETTINGS_KEYS.PLUGIN_ENABLED] !== false;
     const tripleModeEnabled = stored[SETTINGS_KEYS.TRIPLE_MODE_ENABLED] === true;
+    const aggressiveModeEnabled = stored[SETTINGS_KEYS.AGGRESSIVE_MODE] === true;
 
     // Defensive consistency check: Balanced mode can only be active while Triple Mode
     // is enabled — fall back to the remembered standard mode if storage disagrees
@@ -81,6 +82,7 @@ export async function loadSettings() {
     setQuickResolutionVisibility(quickResolutionVisible);
     setPluginEnabledState(pluginEnabled);
     setTripleModeState(tripleModeEnabled);
+    setAggressiveModeState(aggressiveModeEnabled);
     refreshModeHUD();
 
     // Probe the active tab to set the correct idle status (ready / no stream / disabled).
@@ -96,6 +98,7 @@ export async function loadSettings() {
     setQuickResolutionVisibility(DEFAULT_SETTINGS[SETTINGS_KEYS.QUICK_RESOLUTION_VISIBLE]);
     setPluginEnabledState(DEFAULT_SETTINGS[SETTINGS_KEYS.PLUGIN_ENABLED]);
     setTripleModeState(DEFAULT_SETTINGS[SETTINGS_KEYS.TRIPLE_MODE_ENABLED]);
+    setAggressiveModeState(DEFAULT_SETTINGS[SETTINGS_KEYS.AGGRESSIVE_MODE]);
     refreshModeHUD();
     setStatus(STATUS_TYPES.ERROR, 'Failed to load settings. Using defaults.');
   } finally {

@@ -42,7 +42,8 @@ export const SETTINGS_KEYS = {
   QUICK_RESOLUTION_VISIBLE: 'quickResolutionVisible',
   PLUGIN_ENABLED: 'pluginEnabled',
   TRIPLE_MODE_ENABLED: 'tripleModeEnabled',
-  LAST_STANDARD_MODE: 'lastStandardMode'
+  LAST_STANDARD_MODE: 'lastStandardMode',
+  AGGRESSIVE_MODE: 'aggressiveMode'
 };
 export const DEFAULT_SETTINGS = {
   [SETTINGS_KEYS.LOW]: '480p',
@@ -52,7 +53,8 @@ export const DEFAULT_SETTINGS = {
   [SETTINGS_KEYS.QUICK_RESOLUTION_VISIBLE]: false,
   [SETTINGS_KEYS.PLUGIN_ENABLED]: true,
   [SETTINGS_KEYS.TRIPLE_MODE_ENABLED]: false,
-  [SETTINGS_KEYS.LAST_STANDARD_MODE]: MODE_VALUES.HIGH
+  [SETTINGS_KEYS.LAST_STANDARD_MODE]: MODE_VALUES.HIGH,
+  [SETTINGS_KEYS.AGGRESSIVE_MODE]: false
 };
 export const READY_STATUS_MESSAGE = 'Ready. Manage mode or switch resolutions manually.';
 export const DISABLED_STATUS_MESSAGE = 'Plugin logic is disabled. Settings are saved but Twitch quality is unchanged.';

@@ -40,9 +40,16 @@ Firefox requires a signed extension file (`.xpi`). Download the latest `streamsa
 ## What It Does
 
 - One-click quality switching from the popup
-- Two persistent modes: `High Quality` and `Data Saver`
 - Auto re-apply of your selected mode on Twitch live pages without interrupting your viewing
 - Settings are saved in `chrome.storage.local`
+
+## Modes & Toggles
+
+- **Mode buttons** (`Data Saver` / `Balanced` / `High Quality`) — pick one and StreamSaver persists it and immediately applies that mode's configured resolution, on every open Twitch tab.
+- **Resolutions panel** — sets which resolution each mode targets. `Triple Mode` reveals/hides the `Balanced` preset and button; with it off, only `Data Saver` and `High Quality` are available.
+- **Plugin logic** — the master on/off switch. While off, your settings are still saved but nothing is applied to the player.
+- **Quick Resolution** — a show/hide-able panel of one-off quality buttons (160p through Source). Clicking one sets that specific tab's quality immediately without changing its mode, and that pick sticks in that tab until you pick another one or navigate to a different channel there — it won't get overwritten by a mode change you make in another tab.
+- **Aggressive Mode** — off by default. Turning it on adds a periodic check (about every 15 seconds) that re-verifies and corrects quality even without you switching tabs, changing window focus, or navigating — including tabs sitting in the background. Useful if you notice quality drifting on its own with no obvious trigger. It doesn't change what StreamSaver is capable of applying: it still only ever picks from the quality options Twitch's own player actually offers, the same as normal mode. See the note below before turning it on.
 
 ## Real-World Use Case: Two-Speed Streaming
 
@@ -68,6 +75,8 @@ StreamSaver works by briefly opening and closing Twitch's player settings menu i
 **The good news:** you probably won't need to touch it at all. StreamSaver handles everything for you. 🎉
 
 And don't worry about chat - the extension is smart enough to detect when you're typing and keeps its hands off. Everything comes with a cost, but I am working on making it even snappier. 😄
+
+**A note on Aggressive Mode:** it interacts with the player more often and in tabs you're not currently watching, which is simply more automated activity than StreamSaver's default behavior. I have no reports, and am not aware of any cases, of Twitch taking action against an account for using an extension like this - normal mode included. That said, I can't make promises either way about how any platform treats automated UI interaction over time, so treat it as an opt-in convenience rather than a guaranteed-safe default. If you'd rather stay conservative, leave it off - it's entirely optional, and everything else about StreamSaver works exactly the same without it. If you ever do notice anything odd with your account after using it, I'd genuinely like to hear about it via the [issues page](https://github.com/Punshnut/StreamSaver/issues).
 
 ## Privacy
 

@@ -15,7 +15,7 @@
  */
 
 import { SETTINGS_KEYS, MODE_VALUES, DEFAULT_SETTINGS } from './constants.js';
-import { qualityButtons, modeLowButton, modeMediumButton, modeHighButton, pluginEnabledToggle, quickResolutionToggle, tripleModeToggle, fastToggleLow, fastToggleMedium, fastToggleHigh, isPluginEnabled, isQuickResolutionVisible, isTripleModeEnabled, setQuickResolutionVisibility, setPluginEnabledState, setTripleModeState } from './ui.js';
+import { qualityButtons, modeLowButton, modeMediumButton, modeHighButton, pluginEnabledToggle, quickResolutionToggle, tripleModeToggle, aggressiveModeToggle, fastToggleLow, fastToggleMedium, fastToggleHigh, isPluginEnabled, isQuickResolutionVisible, isTripleModeEnabled, isAggressiveModeEnabled, setQuickResolutionVisibility, setPluginEnabledState, setTripleModeState, setAggressiveModeState } from './ui.js';
 import { refreshModeHUD, handleQualityButtonClick, handleModeButtonClick, getModeLabel, readModeResolutions, currentActiveMode, lastStandardMode, sanitizeModeValue, sanitizeStandardModeValue, sanitizeQualityValue, isSupportedQuality } from './mode-quality.js';
 import { launchActionWithStatus, craftQualityRequest } from './messaging.js';
 import { loadSettings, saveSetting, handleSelectChange } from './settings.js';
@@ -150,6 +150,21 @@ if (tripleModeToggle instanceof HTMLInputElement) {
   });
 }
 
+// ─── Aggressive Mode toggle ────────────────────────────────────────────────────
+// Purely a preference switch — the content script's drift-watchdog interval reads
+// it live on each tick, so no immediate quality re-apply is needed here.
+if (aggressiveModeToggle instanceof HTMLInputElement) {
+  aggressiveModeToggle.addEventListener('change', () => {
+    const nextEnabled = aggressiveModeToggle.checked;
+    setAggressiveModeState(nextEnabled);
+    saveSetting(
+      SETTINGS_KEYS.AGGRESSIVE_MODE,
+      nextEnabled,
+      nextEnabled ? 'Aggressive Mode enabled.' : 'Aggressive Mode disabled.'
+    );
+  });
+}
+
 // ─── Initial hydration ────────────────────────────────────────────────────────
 // Run in order: bind handlers → refresh HUD → apply stored enabled/visibility state
 // → load full settings from storage (which also probes the active tab).
@@ -158,4 +173,5 @@ refreshModeHUD();
 setPluginEnabledState(isPluginEnabled);
 setQuickResolutionVisibility(isQuickResolutionVisible);
 setTripleModeState(isTripleModeEnabled);
+setAggressiveModeState(isAggressiveModeEnabled);
 loadSettings();

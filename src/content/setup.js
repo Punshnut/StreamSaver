@@ -16,6 +16,8 @@
  *     - window focus              → window regained focus
  *     - document fullscreenchange → fullscreen entered/exited
  *     - window pageshow           → bfcache page restore
+ *     - setInterval (Aggressive Mode) → periodic drift re-check, opt-in, also
+ *       corrects background/unfocused tabs
  *
  * The fullscreenchange handler also manages the arenaState flags that decide
  * whether a fullscreen exit was caused by the extension (and should be
@@ -28,7 +30,7 @@ import { queueEnforcementRound } from './enforcement.js';
 import { routeQualityRequest } from './automation.js';
 import { isBrowserInFullscreen, attemptRestoreTwitchFullscreen } from './fullscreen.js';
 import { isSupportedTwitchPage, forgeResponse } from './page-support.js';
-import { loadPluginEnabledSetting } from './storage.js';
+import { loadPluginEnabledSetting, loadAggressiveModeSetting } from './storage.js';
 import { scanMenuRoots } from './menu-find.js';
 
 /** Bridges page-support classification into structured step results. */
@@ -135,6 +137,10 @@ export function bootEnforcementLoop() {
   if (missionState.adScanTimerId) {
     clearInterval(missionState.adScanTimerId);
     missionState.adScanTimerId = null;
+  }
+  if (missionState.driftWatchdogTimerId) {
+    clearInterval(missionState.driftWatchdogTimerId);
+    missionState.driftWatchdogTimerId = null;
   }
 
   // --- Trigger 2: SPA navigation (channel switch) ---
@@ -272,6 +278,35 @@ export function bootEnforcementLoop() {
   // closes a player menu they opened themselves (Guard 5.5 in enforcement.js
   // pauses enforcement while userMenuOpen is true).
   watchUserMenuActivity();
+
+  // --- Trigger 8: Aggressive Mode drift watchdog ---
+  // None of the triggers above fire when quality drifts silently while a tab
+  // just sits there with no navigation/focus/visibility change — e.g. a page
+  // script changing the player's quality mid-session. This periodic check
+  // closes that gap, but only when Aggressive Mode is on (default: off, so
+  // this is a no-op storage read every tick for most users). force:true skips
+  // the trust-TTL cache so drift is actually re-detected, not just assumed
+  // fixed for up to 25s; bypassFocusGuard:true lets it correct background/
+  // unfocused tabs too — both are the deliberate "aggressive" trade-off.
+  //
+  // Note: this is meaningfully more active automation than the default
+  // trigger-driven behavior above — it interacts with the player on a timer,
+  // including tabs the user isn't looking at. That's the whole point of the
+  // feature, but keep it opt-in and don't quietly fold any part of it into
+  // the default (non-aggressive) path. See README.md's "A note on Aggressive
+  // Mode" before changing this behavior.
+  missionState.driftWatchdogTimerId = setInterval(async () => {
+    const aggressiveModeResult = await loadAggressiveModeSetting();
+    if (!aggressiveModeResult.details?.aggressiveMode) {
+      return;
+    }
+    debug('quality enforcement: aggressive-mode drift watchdog tick');
+    queueEnforcementRound('drift-watchdog', {
+      force: true,
+      bypassFocusGuard: true,
+      delayMs: 0
+    });
+  }, TIMINGS.DRIFT_WATCHDOG_INTERVAL_MS);
 }
 
 /**

@@ -14,7 +14,9 @@
  *     1. No other run in progress (missionState.inProgress)
  *     2. Cooldown window not active (unless force=true)
  *     3. Browser not in fullscreen
- *     4. Tab is visible and focused
+ *     4. Tab is visible and focused (skipped when options.bypassFocusGuard is
+ *        true — used by the Aggressive Mode drift watchdog in setup.js to
+ *        correct background/unfocused tabs)
  *     5. User is not typing in chat
  *     6. Plugin is enabled in storage
  *     7. Page is a supported Twitch live/VOD URL
@@ -64,6 +66,7 @@ export function strikeCooldownMs() {
 /** Debounces and schedules mode quality enforcement. */
 export function queueEnforcementRound(triggerReason, options = {}) {
   const force = options.force === true;
+  const bypassFocusGuard = options.bypassFocusGuard === true;
   // Clamp to 0 — negative delays would fire synchronously and skip the event loop.
   const baseDelayMs = Number.isFinite(options.delayMs) ? Math.max(0, Math.floor(options.delayMs)) : ENFORCEMENT_DEBOUNCE_MS;
   const cooldownRemainingMs = strikeCooldownMs();
@@ -94,7 +97,7 @@ export function queueEnforcementRound(triggerReason, options = {}) {
     missionState.scheduledTimerId = null;
     // Errors inside runEnforcementRound are caught here so they never become
     // unhandled promise rejections that would surface in the browser console.
-    runEnforcementRound(triggerReason, { force }).catch((error) => {
+    runEnforcementRound(triggerReason, { force, bypassFocusGuard }).catch((error) => {
       debug('quality enforcement: unhandled ensure error', { triggerReason, error: String(error) });
     });
   }, delayMs);
@@ -109,6 +112,11 @@ export function queueEnforcementRound(triggerReason, options = {}) {
 /** Keeps player quality aligned with active mode settings. */
 export async function runEnforcementRound(triggerReason = 'unknown', options = {}) {
   const force = options.force === true;
+  // Aggressive Mode's drift watchdog explicitly opts into running on background/
+  // unfocused tabs — it accepts the menu-close reliability trade-off documented
+  // on the focus guards below in exchange for catching drift with no focus/visibility
+  // event to react to.
+  const bypassFocusGuard = options.bypassFocusGuard === true;
 
   // --- Guard 1: no concurrent run ---
   // inProgress is set synchronously below; this check prevents two async chains
@@ -148,7 +156,7 @@ export async function runEnforcementRound(triggerReason = 'unknown', options = {
   // Escape-key and body-click based menu closing is unreliable when the window
   // doesn't have focus. We record force triggers so they can be replayed as force
   // on the next focus event (see setup.js window 'focus' handler).
-  if (document.visibilityState !== 'visible' || !document.hasFocus()) {
+  if (!bypassFocusGuard && (document.visibilityState !== 'visible' || !document.hasFocus())) {
     debug('quality enforcement: skipped because tab is not visible or window is not focused', { triggerReason });
     // Remember that a force-trigger was blocked so we can replay it as force when
     // focus returns (e.g. popup was open while user changed the resolution setting).
@@ -268,7 +276,7 @@ export async function runEnforcementRound(triggerReason = 'unknown', options = {
 
     // Re-check focus: menu interactions (especially the outside-click fallback) are
     // unreliable without focus and can accidentally toggle VOD play/pause.
-    if (document.visibilityState !== 'visible' || !document.hasFocus()) {
+    if (!bypassFocusGuard && (document.visibilityState !== 'visible' || !document.hasFocus())) {
       debug('quality enforcement: aborted before DOM manipulation — tab lost focus during setup', { triggerReason });
       if (force) {
         missionState.forcePendingAfterFocus = true;
@@ -329,7 +337,7 @@ export async function runEnforcementRound(triggerReason = 'unknown', options = {
     }
 
     // Re-check focus: menus may have been left open and focus lost while they were open.
-    if (document.visibilityState !== 'visible' || !document.hasFocus()) {
+    if (!bypassFocusGuard && (document.visibilityState !== 'visible' || !document.hasFocus())) {
       debug('quality enforcement: aborted after quality detection — tab lost focus during detection', { triggerReason });
       return createResult(false, 'TAB_NOT_FOCUSED', 'Quality enforcement aborted — tab lost focus during detection.');
     }

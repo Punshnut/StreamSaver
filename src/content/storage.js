@@ -8,6 +8,10 @@
  *   Reads just the plugin-enabled flag. Called at the top of every enforcement
  *   and message handler to bail out early if the user has disabled the plugin.
  *
+ * loadAggressiveModeSetting()
+ *   Reads just the Aggressive Mode flag. Polled by the drift-watchdog interval
+ *   in setup.js to decide whether to run its periodic, focus-bypassing check.
+ *
  * loadModeSettingsForEnforcement()
  *   Reads all mode settings in one storage call and validates each value
  *   against known-good sets, falling back to defaults for any corrupt entry.
@@ -20,7 +24,7 @@
 
 import { STORAGE_KEYS, DEFAULT_MODE_SETTINGS, MODE_VALUES } from './constants.js';
 import { debug, createResult } from './utils.js';
-import { validateQuality, validateMode, validatePluginEnabled } from './page-support.js';
+import { validateQuality, validateMode, validatePluginEnabled, validateAggressiveMode } from './page-support.js';
 
 /** Reads plugin-enabled state from storage with safe fallback. */
 export async function loadPluginEnabledSetting() {
@@ -37,6 +41,23 @@ export async function loadPluginEnabledSetting() {
     return createResult(false, 'PLUGIN_ENABLED_READ_FAILED', 'Failed to read plugin-enabled setting from storage.', {
       error: String(error),
       pluginEnabled: DEFAULT_MODE_SETTINGS[STORAGE_KEYS.PLUGIN_ENABLED]
+    });
+  }
+}
+
+/** Reads the Aggressive Mode flag from storage with safe (off) fallback. */
+export async function loadAggressiveModeSetting() {
+  try {
+    const stored = await chrome.storage.local.get({ [STORAGE_KEYS.AGGRESSIVE_MODE]: DEFAULT_MODE_SETTINGS[STORAGE_KEYS.AGGRESSIVE_MODE] });
+    return createResult(true, 'AGGRESSIVE_MODE_READY', 'Loaded Aggressive Mode setting from storage.', {
+      aggressiveMode: validateAggressiveMode(stored[STORAGE_KEYS.AGGRESSIVE_MODE])
+    });
+  } catch (error) {
+    // Storage read failures can happen if the extension context is being destroyed.
+    // Default to off (the safer, less invasive behavior) so we degrade gracefully.
+    return createResult(false, 'AGGRESSIVE_MODE_READ_FAILED', 'Failed to read Aggressive Mode setting from storage.', {
+      error: String(error),
+      aggressiveMode: DEFAULT_MODE_SETTINGS[STORAGE_KEYS.AGGRESSIVE_MODE]
     });
   }
 }

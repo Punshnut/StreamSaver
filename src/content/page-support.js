@@ -20,6 +20,7 @@
  * validateQuality(value)   — normalizes + validates an inbound quality string
  * validateMode(value)      — validates a mode key, defaults unknown to HIGH
  * validatePluginEnabled()  — coerces the stored boolean, defaults unknown to true
+ * validateAggressiveMode() — coerces the stored boolean, defaults unknown to false (opt-in)
  */
 
 import { QUALITY_SET, MODE_SET, MODE_VALUES } from './constants.js';
@@ -170,4 +171,9 @@ export function validatePluginEnabled(value) {
   // The only falsy value that disables the plugin is explicit false.
   // null, undefined, and corrupt values default to enabled.
   return value !== false;
+}
+
+/** Coerces the stored Aggressive Mode flag — opt-in, so anything but explicit true defaults to off. */
+export function validateAggressiveMode(value) {
+  return value === true;
 }

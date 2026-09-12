@@ -16,6 +16,7 @@
  *   lockControls / releaseControls — UI action mutex
  *   setQuickResolutionVisibility  — panel show/hide sync
  *   setPluginEnabledState         — toggle + label + CSS data-attr sync
+ *   setAggressiveModeState        — toggle + label sync for the drift-watchdog preference
  *   setReleaseCallback            — breaks circular dep with mode-quality.js
  */
 
@@ -40,6 +41,8 @@ export const pluginEnabledLabel = document.getElementById('plugin-enabled-label'
 export const quickResolutionToggle = document.getElementById('quick-resolution-visible');
 export const quickResolutionContent = document.getElementById('quick-resolution-content');
 export const tripleModeToggle = document.getElementById('triple-mode-enabled');
+export const aggressiveModeToggle = document.getElementById('aggressive-mode-enabled');
+export const aggressiveModeLabel = document.getElementById('aggressive-mode-label');
 
 // Flat list of all clickable action buttons — used to disable/enable them as a group.
 export const actionButtons = [...qualityButtons, modeLowButton, modeMediumButton, modeHighButton].filter(
@@ -52,6 +55,7 @@ export let isRoundActive = false;     // true while an action is in flight
 export let isQuickResolutionVisible = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.QUICK_RESOLUTION_VISIBLE]);
 export let isPluginEnabled = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.PLUGIN_ENABLED]);
 export let isTripleModeEnabled = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.TRIPLE_MODE_ENABLED]);
+export let isAggressiveModeEnabled = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.AGGRESSIVE_MODE]);
 export let idleStatusType = STATUS_TYPES.SUCCESS;      // resting status type
 export let idleStatusMessage = READY_STATUS_MESSAGE;   // resting status text
 
@@ -230,4 +234,20 @@ export function setPluginEnabledState(enabled) {
   // Also update the idle status message so the "plugin is disabled" notice appears
   // in the status bar when the popup re-opens while the plugin is off.
   setIdleStatus(STATUS_TYPES.SUCCESS, nextEnabled ? READY_STATUS_MESSAGE : DISABLED_STATUS_MESSAGE);
+}
+
+/** Syncs Aggressive Mode toggle + label. Purely a preference switch — doesn't
+ *  trigger a quality re-apply, it only changes the content script's drift-watchdog behavior. */
+export function setAggressiveModeState(enabled) {
+  const nextEnabled = Boolean(enabled);
+  isAggressiveModeEnabled = nextEnabled;
+
+  if (aggressiveModeToggle instanceof HTMLInputElement) {
+    aggressiveModeToggle.checked = nextEnabled;
+    aggressiveModeToggle.setAttribute('aria-checked', String(nextEnabled));
+  }
+
+  if (aggressiveModeLabel instanceof HTMLElement) {
+    aggressiveModeLabel.textContent = nextEnabled ? 'On' : 'Off';
+  }
 }
