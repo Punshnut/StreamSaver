@@ -210,39 +210,45 @@ export async function applyLowLatencyState(desiredEnabled) {
       debug('applyLowLatencyState: close-before step incomplete; continuing', closeBeforeResult);
     }
 
+    // Every branch below sets applyResult instead of returning directly, so the
+    // close-after sweep further down always runs — including on failure paths.
+    // Skipping it here previously left Twitch's settings overlay stuck open,
+    // which menu-hider.js would then force-close via sweepMenus's last-resort
+    // outside-click fallback, landing on (and pausing) a VOD's video layer.
+    let applyResult;
+
     const panelResult = await deployAdvancedPanel();
     if (!panelResult.ok) {
-      return createResult(false, panelResult.code, panelResult.message, { panelResult, closeBeforeResult });
-    }
-
-    let rowResult = panelResult.details.lowLatencyRow?.ok ? panelResult.details.lowLatencyRow : findLowLatencyRow();
-    if (!rowResult.ok) {
-      return createResult(false, rowResult.code, rowResult.message, { rowResult, closeBeforeResult });
-    }
-
-    const row = rowResult.details.element;
-    const currentState = readLowLatencyState(row);
-    debug('applyLowLatencyState: current state', { currentState, desiredEnabled });
-
-    let applyResult;
-    if (currentState === desiredEnabled) {
-      applyResult = createResult(true, 'LOW_LATENCY_ALREADY_CORRECT', `Low Latency already ${desiredEnabled ? 'on' : 'off'}.`, {
-        desiredEnabled,
-        currentState
-      });
+      applyResult = createResult(false, panelResult.code, panelResult.message, { panelResult });
     } else {
-      const clickResult = stealthClick(row, { prepare: false });
-      if (!clickResult.ok) {
-        applyResult = createResult(false, clickResult.code, 'Failed to click the Low Latency row.', { clickResult });
+      let rowResult = panelResult.details.lowLatencyRow?.ok ? panelResult.details.lowLatencyRow : findLowLatencyRow();
+      if (!rowResult.ok) {
+        applyResult = createResult(false, rowResult.code, rowResult.message, { rowResult });
       } else {
-        const confirmResult = await awaitSignal(() => readLowLatencyState(row) === desiredEnabled, {
-          timeoutMs: 800,
-          intervalMs: 60,
-          description: 'Low Latency state flip'
-        });
-        applyResult = confirmResult.ok
-          ? createResult(true, 'LOW_LATENCY_APPLIED', `Low Latency turned ${desiredEnabled ? 'on' : 'off'}.`, { desiredEnabled })
-          : createResult(false, 'LOW_LATENCY_STATE_UNCONFIRMED', 'Clicked the Low Latency row, but could not confirm the new state.', { confirmResult });
+        const row = rowResult.details.element;
+        const currentState = readLowLatencyState(row);
+        debug('applyLowLatencyState: current state', { currentState, desiredEnabled });
+
+        if (currentState === desiredEnabled) {
+          applyResult = createResult(true, 'LOW_LATENCY_ALREADY_CORRECT', `Low Latency already ${desiredEnabled ? 'on' : 'off'}.`, {
+            desiredEnabled,
+            currentState
+          });
+        } else {
+          const clickResult = stealthClick(row, { prepare: false });
+          if (!clickResult.ok) {
+            applyResult = createResult(false, clickResult.code, 'Failed to click the Low Latency row.', { clickResult });
+          } else {
+            const confirmResult = await awaitSignal(() => readLowLatencyState(row) === desiredEnabled, {
+              timeoutMs: 800,
+              intervalMs: 60,
+              description: 'Low Latency state flip'
+            });
+            applyResult = confirmResult.ok
+              ? createResult(true, 'LOW_LATENCY_APPLIED', `Low Latency turned ${desiredEnabled ? 'on' : 'off'}.`, { desiredEnabled })
+              : createResult(false, 'LOW_LATENCY_STATE_UNCONFIRMED', 'Clicked the Low Latency row, but could not confirm the new state.', { confirmResult });
+          }
+        }
       }
     }
 

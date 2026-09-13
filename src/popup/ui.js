@@ -44,9 +44,7 @@ export const tripleModeToggle = document.getElementById('triple-mode-enabled');
 export const aggressiveModeToggle = document.getElementById('aggressive-mode-enabled');
 export const aggressiveModeLabel = document.getElementById('aggressive-mode-label');
 export const subtitlesToggle = document.getElementById('subtitles-enabled');
-export const subtitlesLabel = document.getElementById('subtitles-enabled-label');
 export const lowLatencyToggle = document.getElementById('low-latency-enabled');
-export const lowLatencyLabel = document.getElementById('low-latency-enabled-label');
 
 // Flat list of all clickable action buttons — used to disable/enable them as a group.
 export const actionButtons = [...qualityButtons, modeLowButton, modeMediumButton, modeHighButton].filter(
@@ -258,7 +256,10 @@ export function setAggressiveModeState(enabled) {
   }
 }
 
-/** Syncs Subtitles toggle + label. Applies immediately to the active tab's player. */
+/** Syncs Subtitles toggle. Applies immediately to the active tab's player.
+ *  The label span is the toggle's static name ("Subtitles"), matching the
+ *  compact Triple Mode / Quick Resolution toggles — only the switch itself
+ *  shows on/off, no separate state word. */
 export function setSubtitlesState(enabled) {
   const nextEnabled = Boolean(enabled);
   isSubtitlesEnabled = nextEnabled;
@@ -267,13 +268,10 @@ export function setSubtitlesState(enabled) {
     subtitlesToggle.checked = nextEnabled;
     subtitlesToggle.setAttribute('aria-checked', String(nextEnabled));
   }
-
-  if (subtitlesLabel instanceof HTMLElement) {
-    subtitlesLabel.textContent = nextEnabled ? 'On' : 'Off';
-  }
 }
 
-/** Syncs Low Latency toggle + label. Applies immediately to the active tab's player. */
+/** Syncs Low Latency toggle. Applies immediately to the active tab's player.
+ *  The label span is the toggle's static name ("Low Latency") — see setSubtitlesState. */
 export function setLowLatencyState(enabled) {
   const nextEnabled = Boolean(enabled);
   isLowLatencyEnabled = nextEnabled;
@@ -281,9 +279,5 @@ export function setLowLatencyState(enabled) {
   if (lowLatencyToggle instanceof HTMLInputElement) {
     lowLatencyToggle.checked = nextEnabled;
     lowLatencyToggle.setAttribute('aria-checked', String(nextEnabled));
-  }
-
-  if (lowLatencyLabel instanceof HTMLElement) {
-    lowLatencyLabel.textContent = nextEnabled ? 'On' : 'Off';
   }
 }

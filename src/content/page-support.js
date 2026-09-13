@@ -28,6 +28,17 @@ import { debug, serializeForMessage } from './utils.js';
 import { getPlayerRoot } from './player.js';
 import { parseQualityTag } from './quality-matching.js';
 
+/** True on a VOD watch page (twitch.tv/videos/<id>) — distinct from a channel's
+ *  /videos subpage tab, which isSupportedTwitchPage already excludes entirely.
+ *  Twitch has no Low Latency setting on VODs, so automation that only applies
+ *  to live playback (Settings → Advanced → Low Latency) should skip these pages. */
+export function isVodWatchPage() {
+  const rawPath = location.pathname || '/';
+  const normalizedPath = rawPath.replace(/\/+$/, '') || '/';
+  const segments = normalizedPath.toLowerCase().split('/').filter(Boolean);
+  return segments[0] === 'videos' && segments.length >= 2;
+}
+
 /** Classifies current Twitch URL as supported/unsupported with a clear reason. */
 export function isSupportedTwitchPage() {
   // --- Check 1: hostname ---

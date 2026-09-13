@@ -24,20 +24,18 @@
 
       <!-- Mode controls -->
       <section class="panel" aria-label="Mode">
-        <h2>Mode</h2>
-        <div class="master-switch-row">
-          <p class="master-switch-copy">Subtitles</p>
-          <label class="inline-toggle inline-toggle--master" for="subtitles-enabled">
-            <input type="checkbox" id="subtitles-enabled" name="subtitlesEnabled" />
-            <span id="subtitles-enabled-label">Off</span>
-          </label>
-        </div>
-        <div class="master-switch-row">
-          <p class="master-switch-copy">Low Latency</p>
-          <label class="inline-toggle inline-toggle--master" for="low-latency-enabled">
-            <input type="checkbox" id="low-latency-enabled" name="lowLatencyEnabled" />
-            <span id="low-latency-enabled-label">Off</span>
-          </label>
+        <div class="panel-head">
+          <h2>Mode</h2>
+          <div class="panel-head-toggles">
+            <label class="inline-toggle" for="subtitles-enabled">
+              <input type="checkbox" id="subtitles-enabled" name="subtitlesEnabled" />
+              <span>Subtitles</span>
+            </label>
+            <label class="inline-toggle" for="low-latency-enabled">
+              <input type="checkbox" id="low-latency-enabled" name="lowLatencyEnabled" />
+              <span>Low Latency</span>
+            </label>
+          </div>
         </div>
         <div class="mode-toggle" role="group" aria-label="StreamSaver mode">
           <button type="button" id="mode-low-btn" class="mode-btn" data-mode="low">Data Saver</button>

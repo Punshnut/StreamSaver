@@ -288,26 +288,35 @@ body {
   margin: 0;
 }
 
+.panel-head-toggles {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  row-gap: 4px;
+  column-gap: 7px;
+}
+
 .inline-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   cursor: pointer;
   user-select: none;
 }
 
 .inline-toggle span {
   color: var(--row-label);
-  font-size: 10px;
+  font-size: 8.5px;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .inline-toggle input {
   appearance: none;
-  width: 34px;
-  height: 18px;
+  width: 28px;
+  height: 16px;
   margin: 0;
   border-radius: 999px;
   border: 1px solid #37567f;
@@ -321,8 +330,8 @@ body {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
   background: rgba(233, 244, 255, 0.8);
   box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.32);
@@ -336,7 +345,7 @@ body {
 }
 
 .inline-toggle input:checked::before {
-  transform: translateX(16px);
+  transform: translateX(12px);
   background: #e9f4ff;
 }
 

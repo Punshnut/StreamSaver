@@ -108,6 +108,16 @@ export async function applySubtitlesState(desiredEnabled) {
     });
   }
 
+  // currentState is null when aria-pressed is absent/unreadable — a genuinely
+  // unknown state, not "off". Clicking blindly here could flip subtitles the
+  // wrong way (e.g. turning them on when they were already off but unreadable),
+  // so skip the click rather than guess.
+  if (currentState === null) {
+    return createResult(false, 'SUBTITLES_STATE_UNKNOWN', 'Could not read the current subtitles state; skipping to avoid an incorrect toggle.', {
+      desiredEnabled
+    });
+  }
+
   const clickResult = stealthClick(button, { prepare: false });
   if (!clickResult.ok) {
     return createResult(false, clickResult.code, 'Failed to click the subtitles button.', { clickResult });

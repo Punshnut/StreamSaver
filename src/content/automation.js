@@ -29,7 +29,7 @@
 
 import { SETTINGS_MENU_DEBUG_MODE, missionState } from './constants.js';
 import { debug, createResult, wait } from './utils.js';
-import { forgeResponse, validateQuality } from './page-support.js';
+import { forgeResponse, validateQuality, isVodWatchPage } from './page-support.js';
 import { isAdLive } from './ad-detection.js';
 import { deployMenuShield, liftMenuShield } from './menu-hider.js';
 import { engageQuality } from './quality-apply.js';
@@ -400,6 +400,14 @@ export async function routeLowLatencyRequest(desiredEnabled, pageSupport) {
     const playerRootResult = getPlayerRoot();
     if (!playerRootResult.ok) {
       return forgeResponse(false, 'setLowLatency', 'No Twitch player found on this page.', { pageSupport });
+    }
+
+    // Twitch has no Low Latency setting on VODs — attempting it there is guaranteed
+    // to fail to find the Advanced/Low-Latency UI, which previously left the settings
+    // overlay stuck open and caused a forced close-click that paused VOD playback.
+    // Skip entirely rather than run a futile open/hunt/click sequence on every load.
+    if (isVodWatchPage()) {
+      return forgeResponse(true, 'setLowLatency', 'Low Latency is not available on VODs.', { desiredEnabled: Boolean(desiredEnabled), skipped: true, pageSupport });
     }
 
     if (isAdLive()) {
