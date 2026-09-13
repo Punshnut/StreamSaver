@@ -14,9 +14,11 @@
  */
 
 import { debug } from './utils.js';
+import { missionState } from './constants.js';
 import { isSupportedTwitchPage } from './page-support.js';
 import { loadPluginEnabledSetting, loadSubtitlesSetting, loadLowLatencySetting } from './storage.js';
 import { routeSubtitlesRequest, routeLowLatencyRequest } from './automation.js';
+import { scanMenuRoots } from './menu-find.js';
 
 let debounceTimerId = null;
 
@@ -45,6 +47,15 @@ export async function syncPreferences() {
 
   const pluginEnabledResult = await loadPluginEnabledSetting();
   if (!pluginEnabledResult.details?.pluginEnabled) {
+    return;
+  }
+
+  // Mirror quality enforcement's Guard 5.5 (enforcement.js): if the user has a player
+  // menu open themselves, don't sweep/reopen it out from under them. setup.js's
+  // watchUserMenuActivity() re-queues this sync once the menu closes.
+  if (scanMenuRoots().some((el) => el.offsetParent !== null)) {
+    debug('preferences-sync: skipped — user has a player menu open');
+    missionState.preferenceSyncPendingAfterUserMenu = true;
     return;
   }
 

@@ -27,7 +27,7 @@
  *                                  from the parent settings overlay
  */
 
-import { SETTINGS_MENU_CLOSE_TERMS, SETTINGS_MENU_BACK_TERMS, SETTINGS_MENU_LABEL_GROUPS, QUALITY_SET, SELECTORS } from './constants.js';
+import { SETTINGS_MENU_CLOSE_TERMS, SETTINGS_MENU_BACK_TERMS, SETTINGS_MENU_LABEL_GROUPS, QUALITY_SET, SELECTORS, missionState } from './constants.js';
 import { debug, createResult, isElementVisible, isMenuEntryUsable, getMenuEntryText, getVisibleText, wait, stealthClick, awaitSignal, jitter } from './utils.js';
 import { serializeRect } from './geometry.js';
 import { scanMenuRoots } from './menu-find.js';
@@ -251,6 +251,14 @@ export async function retreatFromQualityPanel() {
 
 /** Attempts to close open Twitch menus, primarily via Escape. */
 export async function sweepMenus(options = {}) {
+  // A real user click on the settings gear (see user-gear-guard.js) sets this
+  // the instant it happens. Never fight the user for a menu they opened
+  // themselves — every automation path routes through here, so this one check
+  // covers all of them.
+  if (missionState.userMenuOpen) {
+    return createResult(false, 'USER_MENU_OPEN', 'Skipped — user has a menu open.');
+  }
+
   const allowBodyClick = options.allowBodyClick !== false;
   const aggressiveBodyClicks = options.aggressiveBodyClicks === true;
   const waitBeforeMs = Number.isFinite(options.waitBeforeMs) ? Math.max(0, Math.floor(options.waitBeforeMs)) : 0;

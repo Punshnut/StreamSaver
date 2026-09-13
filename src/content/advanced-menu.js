@@ -21,6 +21,7 @@ import { deploySettingsPanel } from './settings-menu.js';
 import { canProceedAfterSettingsResult } from './quality-menu.js';
 import { deployMenuShield, liftMenuShield } from './menu-hider.js';
 import { sweepMenus } from './menu-close.js';
+import { getPlayerRoot, wakePlayerControls } from './player.js';
 
 function collectMenuRoots() {
   const menuRoots = scanMenuRoots();
@@ -114,7 +115,15 @@ export async function deployAdvancedPanel() {
     return createResult(false, clickResult.code, 'Failed to click the Advanced entry.', { clickResult });
   }
 
+  // Keep the settings overlay awake while polling for the submenu to render —
+  // without a re-hover, Twitch's own idle/inactivity timer can start dismissing
+  // the overlay mid-wait, which surfaces as a false ADVANCED_SUBMENU_NOT_FOUND.
+  // Mirrors subtitles-toggle.js's equivalent wait loop, which does the same.
+  const playerRootResult = getPlayerRoot();
+  const playerRoot = playerRootResult.ok ? playerRootResult.details.element : null;
+
   const rowWaitResult = await awaitSignal(() => {
+    wakePlayerControls(playerRoot);
     const maybeRow = findLowLatencyRow();
     return maybeRow.ok ? maybeRow : null;
   }, { timeoutMs: 1400, intervalMs: 90, description: 'Advanced submenu rows' });

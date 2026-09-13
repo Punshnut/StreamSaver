@@ -30,7 +30,7 @@
  *   plain text line parsing for menu variants without button/menuitem children.
  */
 
-import { SETTINGS_MENU_LABEL_GROUPS, SETTINGS_MENU_CLOSE_TERMS } from './constants.js';
+import { SETTINGS_MENU_LABEL_GROUPS, SETTINGS_MENU_CLOSE_TERMS, missionState } from './constants.js';
 import { debug, createResult, isElementVisible, isMenuEntryUsable, getMenuEntryText, wait, stealthClick, awaitSignal } from './utils.js';
 import { serializeRect, isRectInside, isRectNear } from './geometry.js';
 import { getPlayerRoot, wakePlayerControls, mapControlZones, huntSettingsTriggers } from './player.js';
@@ -319,6 +319,13 @@ export async function deploySettingsPanel() {
   }
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
+    // A real user click on the settings gear (user-gear-guard.js) sets this the
+    // instant it happens — don't open a competing panel while the user is
+    // trying to use their own.
+    if (missionState.userMenuOpen) {
+      return createResult(false, 'USER_MENU_OPEN', 'Aborted opening settings — user has a menu open.');
+    }
+
     debug('deploySettingsPanel: search attempt', { attempt });
     wakePlayerControls(playerRoot);
     await wait(120);

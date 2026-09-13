@@ -20,7 +20,7 @@
  *   awaitSignal()         — poll-until-condition with timeout
  */
 
-import { DEBUG, DEBUG_PREFIX } from './constants.js';
+import { DEBUG, DEBUG_PREFIX, missionState } from './constants.js';
 
 /** Lightweight debug logger that can be disabled from one flag. */
 export function debug(message, details) {
@@ -242,6 +242,16 @@ export async function awaitSignal(fn, options = {}) {
   let lastError = null;
 
   while (Date.now() - startedAt < timeoutMs) {
+    // A real user click on the settings gear (user-gear-guard.js) sets this the
+    // instant it happens — stop polling immediately rather than keep chasing a
+    // menu the user is now actively using.
+    if (missionState.userMenuOpen) {
+      return createResult(false, 'USER_MENU_OPEN', `Aborted waiting for ${description} — user has a menu open.`, {
+        attempts,
+        elapsedMs: Date.now() - startedAt
+      });
+    }
+
     attempts += 1;
 
     try {

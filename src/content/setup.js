@@ -33,6 +33,7 @@ import { isSupportedTwitchPage, forgeResponse } from './page-support.js';
 import { loadPluginEnabledSetting, loadAggressiveModeSetting } from './storage.js';
 import { queuePreferenceSync } from './preferences-sync.js';
 import { scanMenuRoots } from './menu-find.js';
+import { installUserGearClickGuard } from './user-gear-guard.js';
 
 /** Bridges page-support classification into structured step results. */
 function getPageSupportState() {
@@ -309,6 +310,13 @@ export function bootEnforcementLoop() {
   // pauses enforcement while userMenuOpen is true).
   watchUserMenuActivity();
 
+  // --- Trigger 7.5: real user click on the settings gear ---
+  // Proactively detects a genuine (isTrusted) click on the gear the instant it
+  // happens, instead of only reacting once a menu is already visible at the
+  // start of some later round — and immediately reveals the menu-hider shield
+  // rather than waiting on its own bounded close/retry logic.
+  installUserGearClickGuard();
+
   // --- Trigger 8: Aggressive Mode drift watchdog ---
   // None of the triggers above fire when quality drifts silently while a tab
   // just sits there with no navigation/focus/visibility change — e.g. a page
@@ -364,13 +372,18 @@ function watchUserMenuActivity() {
     if (scanMenuRoots().some(el => el.offsetParent !== null)) return; // still open
 
     const hadForcePending = missionState.userMenuForcePending;
+    const hadPreferenceSyncPending = missionState.preferenceSyncPendingAfterUserMenu;
     missionState.userMenuOpen = false;
     missionState.userMenuForcePending = false;
+    missionState.preferenceSyncPendingAfterUserMenu = false;
     debug('quality enforcement: user menu closed — resuming');
     queueEnforcementRound('user-menu-closed', {
       force: hadForcePending,
       delayMs: TIMINGS.USER_MENU_RESUME_DELAY_MS
     });
+    if (hadPreferenceSyncPending) {
+      queuePreferenceSync('user-menu-closed', { delayMs: TIMINGS.USER_MENU_RESUME_DELAY_MS });
+    }
   });
   observer.observe(document.body, { childList: true, subtree: true });
 }

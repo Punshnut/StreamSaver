@@ -24,6 +24,7 @@
  */
 
 import { debug, wait } from './utils.js';
+import { missionState } from './constants.js';
 import { scanMenuRoots } from './menu-find.js';
 import { sweepMenus } from './menu-close.js';
 
@@ -111,6 +112,11 @@ async function attemptMenuClose({ allowBodyClick, rounds, pollMs = 400 }) {
 async function resolveHiderRemoval(attemptsSoFar = 0) {
   if (hiderRefCount > 0) return; // a newer automation call owns the shield now
 
+  // A real user click on the settings gear (user-gear-guard.js) already force-
+  // revealed the shield synchronously and is not ours to close — don't sweep
+  // against a menu the user is actively using.
+  if (missionState.userMenuOpen) return;
+
   if (scanMenuRoots().length === 0) {
     debug('menuHider: hide (menus confirmed closed)', { t: Date.now(), attemptsSoFar });
     document.getElementById('streamsaver-menu-hider')?.remove();
@@ -178,4 +184,21 @@ export async function liftMenuShield() {
   if (hiderRefCount > 0) return;
 
   await resolveHiderRemoval(0);
+}
+
+/**
+ * Immediately removes the hider style and resets the ref-count, bypassing the
+ * normal ref-count/retry gate entirely. Used by user-gear-guard.js the instant
+ * a real (isTrusted) click on the settings gear is detected — the user is
+ * trying to use the menu right now, so there's no time to wait on
+ * resolveHiderRemoval()'s bounded retries (which also try to *close* menus,
+ * the opposite of what's wanted here).
+ */
+export function forceRevealMenuShield() {
+  hiderRefCount = 0;
+  const existed = Boolean(document.getElementById('streamsaver-menu-hider'));
+  document.getElementById('streamsaver-menu-hider')?.remove();
+  if (existed) {
+    debug('menuHider: force-revealed for a real user gear click', { t: Date.now() });
+  }
 }
