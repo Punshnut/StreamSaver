@@ -20,6 +20,7 @@ import { debug, awaitSignal } from './utils.js';
 import { getPlayerRoot } from './player.js';
 import { bootEnforcementLoop, bindCommandPort } from './setup.js';
 import { queueEnforcementRound } from './enforcement.js';
+import { queuePreferenceSync } from './preferences-sync.js';
 import { TIMINGS } from './constants.js';
 
 // Guard: run only on twitch.tv hosts.
@@ -32,6 +33,7 @@ if (location.hostname.endsWith('twitch.tv')) {
     force: true,
     delayMs: TIMINGS.SPAWN_DELAY_MS
   });
+  queuePreferenceSync('initial-load', { delayMs: TIMINGS.SPAWN_DELAY_MS });
 
   // Startup probe for visible player readiness.
   awaitSignal(() => getPlayerRoot().ok, {

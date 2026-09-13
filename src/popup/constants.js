@@ -27,7 +27,9 @@ export const MODE_LABELS = {
   [MODE_VALUES.HIGH]: 'High Quality'
 };
 export const ACTION_NAMES = {
-  SET_QUALITY: 'setQuality'
+  SET_QUALITY: 'setQuality',
+  SET_SUBTITLES: 'setSubtitles',
+  SET_LOW_LATENCY: 'setLowLatency'
 };
 export const STATUS_TYPES = {
   LOADING: 'loading',
@@ -43,7 +45,9 @@ export const SETTINGS_KEYS = {
   PLUGIN_ENABLED: 'pluginEnabled',
   TRIPLE_MODE_ENABLED: 'tripleModeEnabled',
   LAST_STANDARD_MODE: 'lastStandardMode',
-  AGGRESSIVE_MODE: 'aggressiveMode'
+  AGGRESSIVE_MODE: 'aggressiveMode',
+  SUBTITLES_ENABLED: 'subtitlesEnabled',
+  LOW_LATENCY_ENABLED: 'lowLatencyEnabled'
 };
 export const DEFAULT_SETTINGS = {
   [SETTINGS_KEYS.LOW]: '480p',
@@ -54,7 +58,9 @@ export const DEFAULT_SETTINGS = {
   [SETTINGS_KEYS.PLUGIN_ENABLED]: true,
   [SETTINGS_KEYS.TRIPLE_MODE_ENABLED]: false,
   [SETTINGS_KEYS.LAST_STANDARD_MODE]: MODE_VALUES.HIGH,
-  [SETTINGS_KEYS.AGGRESSIVE_MODE]: false
+  [SETTINGS_KEYS.AGGRESSIVE_MODE]: false,
+  [SETTINGS_KEYS.SUBTITLES_ENABLED]: false,
+  [SETTINGS_KEYS.LOW_LATENCY_ENABLED]: false
 };
 export const READY_STATUS_MESSAGE = 'Ready. Manage mode or switch resolutions manually.';
 export const DISABLED_STATUS_MESSAGE = 'Plugin logic is disabled. Settings are saved but Twitch quality is unchanged.';

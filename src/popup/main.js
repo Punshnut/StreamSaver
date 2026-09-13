@@ -15,9 +15,9 @@
  */
 
 import { SETTINGS_KEYS, MODE_VALUES, DEFAULT_SETTINGS } from './constants.js';
-import { qualityButtons, modeLowButton, modeMediumButton, modeHighButton, pluginEnabledToggle, quickResolutionToggle, tripleModeToggle, aggressiveModeToggle, fastToggleLow, fastToggleMedium, fastToggleHigh, isPluginEnabled, isQuickResolutionVisible, isTripleModeEnabled, isAggressiveModeEnabled, setQuickResolutionVisibility, setPluginEnabledState, setTripleModeState, setAggressiveModeState } from './ui.js';
+import { qualityButtons, modeLowButton, modeMediumButton, modeHighButton, pluginEnabledToggle, quickResolutionToggle, tripleModeToggle, aggressiveModeToggle, subtitlesToggle, lowLatencyToggle, fastToggleLow, fastToggleMedium, fastToggleHigh, isPluginEnabled, isQuickResolutionVisible, isTripleModeEnabled, isAggressiveModeEnabled, isSubtitlesEnabled, isLowLatencyEnabled, setQuickResolutionVisibility, setPluginEnabledState, setTripleModeState, setAggressiveModeState, setSubtitlesState, setLowLatencyState } from './ui.js';
 import { refreshModeHUD, handleQualityButtonClick, handleModeButtonClick, getModeLabel, readModeResolutions, currentActiveMode, lastStandardMode, sanitizeModeValue, sanitizeStandardModeValue, sanitizeQualityValue, isSupportedQuality } from './mode-quality.js';
-import { launchActionWithStatus, craftQualityRequest } from './messaging.js';
+import { launchActionWithStatus, craftQualityRequest, craftSubtitlesRequest, craftLowLatencyRequest } from './messaging.js';
 import { loadSettings, saveSetting, handleSelectChange } from './settings.js';
 import { probeIdleStatus } from './idle-status.js';
 
@@ -165,6 +165,52 @@ if (aggressiveModeToggle instanceof HTMLInputElement) {
   });
 }
 
+// ─── Subtitles toggle ──────────────────────────────────────────────────────────
+// Unlike Aggressive Mode (a passive preference), this must flip Twitch's native
+// captions button on the active tab immediately, the same way a quality change does.
+if (subtitlesToggle instanceof HTMLInputElement) {
+  subtitlesToggle.addEventListener('change', async () => {
+    const nextEnabled = subtitlesToggle.checked;
+    const previousEnabled = isSubtitlesEnabled;
+
+    setSubtitlesState(nextEnabled); // optimistic
+
+    const didSave = await saveSetting(
+      SETTINGS_KEYS.SUBTITLES_ENABLED,
+      nextEnabled,
+      nextEnabled ? 'Subtitles enabled.' : 'Subtitles disabled.'
+    );
+    if (!didSave) {
+      setSubtitlesState(previousEnabled);
+      return;
+    }
+
+    launchActionWithStatus(craftSubtitlesRequest(nextEnabled), nextEnabled ? 'Turning subtitles on...' : 'Turning subtitles off...');
+  });
+}
+
+// ─── Low Latency toggle ────────────────────────────────────────────────────────
+if (lowLatencyToggle instanceof HTMLInputElement) {
+  lowLatencyToggle.addEventListener('change', async () => {
+    const nextEnabled = lowLatencyToggle.checked;
+    const previousEnabled = isLowLatencyEnabled;
+
+    setLowLatencyState(nextEnabled); // optimistic
+
+    const didSave = await saveSetting(
+      SETTINGS_KEYS.LOW_LATENCY_ENABLED,
+      nextEnabled,
+      nextEnabled ? 'Low Latency enabled.' : 'Low Latency disabled.'
+    );
+    if (!didSave) {
+      setLowLatencyState(previousEnabled);
+      return;
+    }
+
+    launchActionWithStatus(craftLowLatencyRequest(nextEnabled), nextEnabled ? 'Turning Low Latency on...' : 'Turning Low Latency off...');
+  });
+}
+
 // ─── Initial hydration ────────────────────────────────────────────────────────
 // Run in order: bind handlers → refresh HUD → apply stored enabled/visibility state
 // → load full settings from storage (which also probes the active tab).
@@ -174,4 +220,6 @@ setPluginEnabledState(isPluginEnabled);
 setQuickResolutionVisibility(isQuickResolutionVisible);
 setTripleModeState(isTripleModeEnabled);
 setAggressiveModeState(isAggressiveModeEnabled);
+setSubtitlesState(isSubtitlesEnabled);
+setLowLatencyState(isLowLatencyEnabled);
 loadSettings();

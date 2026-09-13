@@ -177,3 +177,13 @@ export function validatePluginEnabled(value) {
 export function validateAggressiveMode(value) {
   return value === true;
 }
+
+/** Coerces the stored Subtitles flag — opt-in, so anything but explicit true defaults to off. */
+export function validateSubtitlesEnabled(value) {
+  return value === true;
+}
+
+/** Coerces the stored Low Latency flag — opt-in, so anything but explicit true defaults to off. */
+export function validateLowLatencyEnabled(value) {
+  return value === true;
+}

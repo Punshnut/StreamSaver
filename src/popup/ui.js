@@ -43,6 +43,10 @@ export const quickResolutionContent = document.getElementById('quick-resolution-
 export const tripleModeToggle = document.getElementById('triple-mode-enabled');
 export const aggressiveModeToggle = document.getElementById('aggressive-mode-enabled');
 export const aggressiveModeLabel = document.getElementById('aggressive-mode-label');
+export const subtitlesToggle = document.getElementById('subtitles-enabled');
+export const subtitlesLabel = document.getElementById('subtitles-enabled-label');
+export const lowLatencyToggle = document.getElementById('low-latency-enabled');
+export const lowLatencyLabel = document.getElementById('low-latency-enabled-label');
 
 // Flat list of all clickable action buttons — used to disable/enable them as a group.
 export const actionButtons = [...qualityButtons, modeLowButton, modeMediumButton, modeHighButton].filter(
@@ -56,6 +60,8 @@ export let isQuickResolutionVisible = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.QUI
 export let isPluginEnabled = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.PLUGIN_ENABLED]);
 export let isTripleModeEnabled = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.TRIPLE_MODE_ENABLED]);
 export let isAggressiveModeEnabled = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.AGGRESSIVE_MODE]);
+export let isSubtitlesEnabled = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.SUBTITLES_ENABLED]);
+export let isLowLatencyEnabled = Boolean(DEFAULT_SETTINGS[SETTINGS_KEYS.LOW_LATENCY_ENABLED]);
 export let idleStatusType = STATUS_TYPES.SUCCESS;      // resting status type
 export let idleStatusMessage = READY_STATUS_MESSAGE;   // resting status text
 
@@ -249,5 +255,35 @@ export function setAggressiveModeState(enabled) {
 
   if (aggressiveModeLabel instanceof HTMLElement) {
     aggressiveModeLabel.textContent = nextEnabled ? 'On' : 'Off';
+  }
+}
+
+/** Syncs Subtitles toggle + label. Applies immediately to the active tab's player. */
+export function setSubtitlesState(enabled) {
+  const nextEnabled = Boolean(enabled);
+  isSubtitlesEnabled = nextEnabled;
+
+  if (subtitlesToggle instanceof HTMLInputElement) {
+    subtitlesToggle.checked = nextEnabled;
+    subtitlesToggle.setAttribute('aria-checked', String(nextEnabled));
+  }
+
+  if (subtitlesLabel instanceof HTMLElement) {
+    subtitlesLabel.textContent = nextEnabled ? 'On' : 'Off';
+  }
+}
+
+/** Syncs Low Latency toggle + label. Applies immediately to the active tab's player. */
+export function setLowLatencyState(enabled) {
+  const nextEnabled = Boolean(enabled);
+  isLowLatencyEnabled = nextEnabled;
+
+  if (lowLatencyToggle instanceof HTMLInputElement) {
+    lowLatencyToggle.checked = nextEnabled;
+    lowLatencyToggle.setAttribute('aria-checked', String(nextEnabled));
+  }
+
+  if (lowLatencyLabel instanceof HTMLElement) {
+    lowLatencyLabel.textContent = nextEnabled ? 'On' : 'Off';
   }
 }

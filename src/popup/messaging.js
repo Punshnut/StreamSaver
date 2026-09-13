@@ -210,3 +210,19 @@ export function craftQualityRequest(quality, manualOverride = false) {
     manualOverride
   };
 }
+
+/** Creates the payload used to toggle Twitch's subtitles/closed-captions control. */
+export function craftSubtitlesRequest(enabled) {
+  return {
+    action: ACTION_NAMES.SET_SUBTITLES,
+    enabled: Boolean(enabled)
+  };
+}
+
+/** Creates the payload used to toggle Twitch's Low Latency player setting. */
+export function craftLowLatencyRequest(enabled) {
+  return {
+    action: ACTION_NAMES.SET_LOW_LATENCY,
+    enabled: Boolean(enabled)
+  };
+}

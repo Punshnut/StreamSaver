@@ -24,7 +24,7 @@
 
 import { STORAGE_KEYS, DEFAULT_MODE_SETTINGS, MODE_VALUES } from './constants.js';
 import { debug, createResult } from './utils.js';
-import { validateQuality, validateMode, validatePluginEnabled, validateAggressiveMode } from './page-support.js';
+import { validateQuality, validateMode, validatePluginEnabled, validateAggressiveMode, validateSubtitlesEnabled, validateLowLatencyEnabled } from './page-support.js';
 
 /** Reads plugin-enabled state from storage with safe fallback. */
 export async function loadPluginEnabledSetting() {
@@ -58,6 +58,36 @@ export async function loadAggressiveModeSetting() {
     return createResult(false, 'AGGRESSIVE_MODE_READ_FAILED', 'Failed to read Aggressive Mode setting from storage.', {
       error: String(error),
       aggressiveMode: DEFAULT_MODE_SETTINGS[STORAGE_KEYS.AGGRESSIVE_MODE]
+    });
+  }
+}
+
+/** Reads the Subtitles preference from storage with safe (off) fallback. */
+export async function loadSubtitlesSetting() {
+  try {
+    const stored = await chrome.storage.local.get({ [STORAGE_KEYS.SUBTITLES_ENABLED]: DEFAULT_MODE_SETTINGS[STORAGE_KEYS.SUBTITLES_ENABLED] });
+    return createResult(true, 'SUBTITLES_ENABLED_READY', 'Loaded Subtitles setting from storage.', {
+      subtitlesEnabled: validateSubtitlesEnabled(stored[STORAGE_KEYS.SUBTITLES_ENABLED])
+    });
+  } catch (error) {
+    return createResult(false, 'SUBTITLES_ENABLED_READ_FAILED', 'Failed to read Subtitles setting from storage.', {
+      error: String(error),
+      subtitlesEnabled: DEFAULT_MODE_SETTINGS[STORAGE_KEYS.SUBTITLES_ENABLED]
+    });
+  }
+}
+
+/** Reads the Low Latency preference from storage with safe (off) fallback. */
+export async function loadLowLatencySetting() {
+  try {
+    const stored = await chrome.storage.local.get({ [STORAGE_KEYS.LOW_LATENCY_ENABLED]: DEFAULT_MODE_SETTINGS[STORAGE_KEYS.LOW_LATENCY_ENABLED] });
+    return createResult(true, 'LOW_LATENCY_ENABLED_READY', 'Loaded Low Latency setting from storage.', {
+      lowLatencyEnabled: validateLowLatencyEnabled(stored[STORAGE_KEYS.LOW_LATENCY_ENABLED])
+    });
+  } catch (error) {
+    return createResult(false, 'LOW_LATENCY_ENABLED_READ_FAILED', 'Failed to read Low Latency setting from storage.', {
+      error: String(error),
+      lowLatencyEnabled: DEFAULT_MODE_SETTINGS[STORAGE_KEYS.LOW_LATENCY_ENABLED]
     });
   }
 }

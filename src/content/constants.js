@@ -50,7 +50,9 @@ export const STORAGE_KEYS = {
   FAST_TOGGLE_HIGH: 'fastToggleHigh',
   ACTIVE_MODE: 'activeMode',
   PLUGIN_ENABLED: 'pluginEnabled',
-  AGGRESSIVE_MODE: 'aggressiveMode'
+  AGGRESSIVE_MODE: 'aggressiveMode',
+  SUBTITLES_ENABLED: 'subtitlesEnabled',
+  LOW_LATENCY_ENABLED: 'lowLatencyEnabled'
 };
 export const DEFAULT_MODE_SETTINGS = {
   [STORAGE_KEYS.FAST_TOGGLE_LOW]: '480p',
@@ -58,7 +60,9 @@ export const DEFAULT_MODE_SETTINGS = {
   [STORAGE_KEYS.FAST_TOGGLE_HIGH]: 'Source',
   [STORAGE_KEYS.ACTIVE_MODE]: MODE_VALUES.HIGH,
   [STORAGE_KEYS.PLUGIN_ENABLED]: true,
-  [STORAGE_KEYS.AGGRESSIVE_MODE]: false
+  [STORAGE_KEYS.AGGRESSIVE_MODE]: false,
+  [STORAGE_KEYS.SUBTITLES_ENABLED]: false,
+  [STORAGE_KEYS.LOW_LATENCY_ENABLED]: false
 };
 
 // All timing constants in one place — tweak delays here, not scattered across files.
@@ -81,7 +85,8 @@ export const TIMINGS = {
   PLAYER_READY_TIMEOUT_MS: 6_000,  // max wait for player to appear before aborting
   QUALITY_TRUST_TTL_MS: 25_000,    // skip detect+set when quality was recently confirmed
   USER_MENU_RESUME_DELAY_MS: 400,  // settle time after user-opened menu closes before re-enforcement
-  DRIFT_WATCHDOG_INTERVAL_MS: 15_000, // Aggressive Mode: periodic drift re-check interval
+  DRIFT_WATCHDOG_INTERVAL_MS: 15_000, // Aggressive Mode: periodic quality drift re-check interval
+  PREFERENCE_DRIFT_INTERVAL_MS: 60_000, // Aggressive Mode: periodic Subtitles/Low Latency re-check interval
 };
 
 // Named re-exports for backwards compatibility with existing imports.

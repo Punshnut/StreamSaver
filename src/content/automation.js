@@ -37,6 +37,8 @@ import { deployQualityPanel, readActiveQuality, scanQualityOptions } from './qua
 import { sweepMenus } from './menu-close.js';
 import { loadPluginEnabledSetting } from './storage.js';
 import { getPlayerRoot } from './player.js';
+import { applySubtitlesState } from './subtitles-toggle.js';
+import { applyLowLatencyState } from './advanced-menu.js';
 
 // Holds the currently executing quality run Promise, or null when idle.
 // Inspected by lockQualityRun to reject concurrent callers immediately.
@@ -349,5 +351,67 @@ export async function routeQualityRequest(targetQuality, pageSupport, manualOver
     }
 
     return response;
+  });
+}
+
+/** Handles action=setSubtitles. Shares the quality automation mutex since both
+ *  interact with the same player controls. */
+export async function routeSubtitlesRequest(desiredEnabled, pageSupport) {
+  return lockQualityRun('setSubtitles', async () => {
+    const pluginEnabledResult = await loadPluginEnabledSetting();
+    if (!pluginEnabledResult.ok) {
+      return forgeResponse(false, 'setSubtitles', pluginEnabledResult.message, pluginEnabledResult.details);
+    }
+    if (!pluginEnabledResult.details?.pluginEnabled) {
+      return forgeResponse(false, 'setSubtitles', 'Plugin logic is disabled. Turn it on in the popup to apply this change.', {
+        pluginEnabled: false
+      });
+    }
+
+    const playerRootResult = getPlayerRoot();
+    if (!playerRootResult.ok) {
+      return forgeResponse(false, 'setSubtitles', 'No Twitch player found on this page.', { pageSupport });
+    }
+
+    const result = await applySubtitlesState(Boolean(desiredEnabled));
+    return forgeResponse(result.ok, 'setSubtitles', result.message, {
+      desiredEnabled: Boolean(desiredEnabled),
+      resultCode: result.code,
+      step: result,
+      pageSupport
+    });
+  });
+}
+
+/** Handles action=setLowLatency. Shares the quality automation mutex since both
+ *  open the same settings overlay and must not run concurrently. */
+export async function routeLowLatencyRequest(desiredEnabled, pageSupport) {
+  return lockQualityRun('setLowLatency', async () => {
+    const pluginEnabledResult = await loadPluginEnabledSetting();
+    if (!pluginEnabledResult.ok) {
+      return forgeResponse(false, 'setLowLatency', pluginEnabledResult.message, pluginEnabledResult.details);
+    }
+    if (!pluginEnabledResult.details?.pluginEnabled) {
+      return forgeResponse(false, 'setLowLatency', 'Plugin logic is disabled. Turn it on in the popup to apply this change.', {
+        pluginEnabled: false
+      });
+    }
+
+    const playerRootResult = getPlayerRoot();
+    if (!playerRootResult.ok) {
+      return forgeResponse(false, 'setLowLatency', 'No Twitch player found on this page.', { pageSupport });
+    }
+
+    if (isAdLive()) {
+      return forgeResponse(false, 'setLowLatency', 'Low Latency change skipped — Twitch ad is currently playing.', { pageSupport });
+    }
+
+    const result = await applyLowLatencyState(Boolean(desiredEnabled));
+    return forgeResponse(result.ok, 'setLowLatency', result.message, {
+      desiredEnabled: Boolean(desiredEnabled),
+      resultCode: result.code,
+      step: result,
+      pageSupport
+    });
   });
 }

@@ -27,10 +27,11 @@
 import { missionState, arenaState, STORAGE_KEYS, TIMINGS } from './constants.js';
 import { debug } from './utils.js';
 import { queueEnforcementRound } from './enforcement.js';
-import { routeQualityRequest } from './automation.js';
+import { routeQualityRequest, routeSubtitlesRequest, routeLowLatencyRequest } from './automation.js';
 import { isBrowserInFullscreen, attemptRestoreTwitchFullscreen } from './fullscreen.js';
 import { isSupportedTwitchPage, forgeResponse } from './page-support.js';
 import { loadPluginEnabledSetting, loadAggressiveModeSetting } from './storage.js';
+import { queuePreferenceSync } from './preferences-sync.js';
 import { scanMenuRoots } from './menu-find.js';
 
 /** Bridges page-support classification into structured step results. */
@@ -83,6 +84,14 @@ export function bindCommandPort() {
         return routeQualityRequest(message.targetQuality, pageSupport, message.manualOverride === true);
       }
 
+      if (action === 'setSubtitles') {
+        return routeSubtitlesRequest(message.enabled === true, pageSupport);
+      }
+
+      if (action === 'setLowLatency') {
+        return routeLowLatencyRequest(message.enabled === true, pageSupport);
+      }
+
       // Probe used by the popup to set its idle status on open — returns whether
       // the current page has a supported player without changing anything.
       if (action === 'streamsaverPopupProbe') {
@@ -132,6 +141,24 @@ export function bootEnforcementLoop() {
     });
   });
 
+  // Separate from the quality relevantKeys above — Subtitles/Low Latency don't
+  // participate in quality's cooldown/trust-TTL machinery. This is what lets a
+  // toggle flipped from the popup reach an already-open tab on a *different*
+  // tab (the popup only messages the currently active tab directly).
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'local') {
+      return;
+    }
+    const preferenceKeys = [STORAGE_KEYS.SUBTITLES_ENABLED, STORAGE_KEYS.LOW_LATENCY_ENABLED].filter((key) => {
+      return Object.prototype.hasOwnProperty.call(changes, key);
+    });
+    if (preferenceKeys.length === 0) {
+      return;
+    }
+    debug('preferences-sync: storage change detected', { keys: preferenceKeys });
+    queuePreferenceSync('storage-change', { delayMs: TIMINGS.STORAGE_CHANGE_DELAY_MS });
+  });
+
   // Safety: if bootEnforcementLoop is ever called a second time (re-init scenario),
   // clear any lingering ad-polling interval from the previous boot.
   if (missionState.adScanTimerId) {
@@ -171,6 +198,9 @@ export function bootEnforcementLoop() {
       force: true,
       delayMs: TIMINGS.WARP_DELAY_MS
     });
+    // Twitch can reset Subtitles/Low Latency to its own per-stream defaults on
+    // some navigations — re-sync the stored preference for the new channel too.
+    queuePreferenceSync('spa-navigation', { delayMs: TIMINGS.WARP_DELAY_MS });
   }, TIMINGS.URL_WATCH_INTERVAL_MS);
 
   // --- Trigger 3: tab visibility ---
@@ -295,6 +325,11 @@ export function bootEnforcementLoop() {
   // feature, but keep it opt-in and don't quietly fold any part of it into
   // the default (non-aggressive) path. See README.md's "A note on Aggressive
   // Mode" before changing this behavior.
+  // Tracks elapsed ticks so Subtitles/Low Latency can drift-check on their own,
+  // slower cadence (PREFERENCE_DRIFT_INTERVAL_MS) without a second setInterval —
+  // quality keeps its existing 15 s cadence, preferences ride along every Nth tick.
+  let driftWatchdogTickCount = 0;
+  const preferenceDriftEveryNTicks = Math.max(1, Math.round(TIMINGS.PREFERENCE_DRIFT_INTERVAL_MS / TIMINGS.DRIFT_WATCHDOG_INTERVAL_MS));
   missionState.driftWatchdogTimerId = setInterval(async () => {
     const aggressiveModeResult = await loadAggressiveModeSetting();
     if (!aggressiveModeResult.details?.aggressiveMode) {
@@ -306,6 +341,12 @@ export function bootEnforcementLoop() {
       bypassFocusGuard: true,
       delayMs: 0
     });
+
+    driftWatchdogTickCount += 1;
+    if (driftWatchdogTickCount % preferenceDriftEveryNTicks === 0) {
+      debug('preferences-sync: aggressive-mode drift watchdog tick');
+      queuePreferenceSync('drift-watchdog', { delayMs: 0 });
+    }
   }, TIMINGS.DRIFT_WATCHDOG_INTERVAL_MS);
 }
 

@@ -17,6 +17,7 @@
  *   settingsQuality  – labels for the quality group inside the settings submenu
  *   settingsSubtitles – labels for the subtitles group
  *   settingsAdvanced – labels for the advanced group
+ *   settingsLowLatency – labels for the Low Latency row inside the advanced group
  *   settingsClose    – labels for the close button of the settings panel
  *   settingsBack     – labels for the back button inside the settings panel
  */
@@ -35,6 +36,7 @@ const TERMS_BY_LOCALE = {
     settingsQuality:   ['quality', 'resolution'],
     settingsSubtitles: ['subtitles'],
     settingsAdvanced:  ['advanced'],
+    settingsLowLatency: ['low latency'],
     settingsClose:     ['close'],
     settingsBack:      ['back', 'go back'],
   },
@@ -211,9 +213,10 @@ export function buildTermsForLocales(locales) {
     QUALITY_ENTRY_TERMS:       mergeKey('qualityEntry',      locales),
     SETTINGS_TRIGGER_TERMS:    mergeKey('settingsTrigger',   locales),
     SETTINGS_MENU_LABEL_GROUPS: {
-      quality:   mergeKey('settingsQuality',   locales),
-      subtitles: mergeKey('settingsSubtitles', locales),
-      advanced:  mergeKey('settingsAdvanced',  locales),
+      quality:    mergeKey('settingsQuality',    locales),
+      subtitles:  mergeKey('settingsSubtitles',  locales),
+      advanced:   mergeKey('settingsAdvanced',   locales),
+      lowLatency: mergeKey('settingsLowLatency', locales),
     },
     SETTINGS_MENU_CLOSE_TERMS: mergeKey('settingsClose', locales),
     SETTINGS_MENU_BACK_TERMS:  mergeKey('settingsBack',  locales),
