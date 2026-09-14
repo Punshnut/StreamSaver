@@ -54,7 +54,12 @@ export function installUserGearClickGuard() {
     }
 
     debug('user-gear-guard: real user click on settings gear detected — standing down');
+    // userMenuOpen also pauses new automatic enforcement rounds (Guard 5.5);
+    // realGearMenuOpen is the narrower, false-positive-free signal that
+    // sweepMenus/awaitSignal/deploySettingsPanel/resolveHiderRemoval check to
+    // abort mid-flight — see constants.js for why these are kept separate.
     missionState.userMenuOpen = true;
+    missionState.realGearMenuOpen = true;
     forceRevealMenuShield();
   }, true);
 }

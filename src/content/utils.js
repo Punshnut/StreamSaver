@@ -242,10 +242,12 @@ export async function awaitSignal(fn, options = {}) {
   let lastError = null;
 
   while (Date.now() - startedAt < timeoutMs) {
-    // A real user click on the settings gear (user-gear-guard.js) sets this the
-    // instant it happens — stop polling immediately rather than keep chasing a
-    // menu the user is now actively using.
-    if (missionState.userMenuOpen) {
+    // A real, verified user click on the settings gear (user-gear-guard.js) sets
+    // this the instant it happens — stop polling immediately rather than keep
+    // chasing a menu the user is now actively using. Deliberately narrower than
+    // missionState.userMenuOpen (see constants.js) so an unrelated Twitch menu/
+    // dialog never aborts an ordinary wait.
+    if (missionState.realGearMenuOpen) {
       return createResult(false, 'USER_MENU_OPEN', `Aborted waiting for ${description} — user has a menu open.`, {
         attempts,
         elapsedMs: Date.now() - startedAt

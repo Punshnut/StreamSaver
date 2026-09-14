@@ -251,11 +251,13 @@ export async function retreatFromQualityPanel() {
 
 /** Attempts to close open Twitch menus, primarily via Escape. */
 export async function sweepMenus(options = {}) {
-  // A real user click on the settings gear (see user-gear-guard.js) sets this
-  // the instant it happens. Never fight the user for a menu they opened
-  // themselves — every automation path routes through here, so this one check
-  // covers all of them.
-  if (missionState.userMenuOpen) {
+  // A real, verified user click on the settings gear (see user-gear-guard.js)
+  // sets this the instant it happens. Never fight the user for a menu they
+  // opened themselves — every automation path routes through here, so this one
+  // check covers all of them. Deliberately narrower than missionState.userMenuOpen
+  // (which any unrelated Twitch menu/dialog can set) so this never blocks an
+  // ordinary popup-triggered quality/Low Latency change.
+  if (missionState.realGearMenuOpen) {
     return createResult(false, 'USER_MENU_OPEN', 'Skipped — user has a menu open.');
   }
 

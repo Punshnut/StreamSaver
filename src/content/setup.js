@@ -374,6 +374,7 @@ function watchUserMenuActivity() {
     const hadForcePending = missionState.userMenuForcePending;
     const hadPreferenceSyncPending = missionState.preferenceSyncPendingAfterUserMenu;
     missionState.userMenuOpen = false;
+    missionState.realGearMenuOpen = false;
     missionState.userMenuForcePending = false;
     missionState.preferenceSyncPendingAfterUserMenu = false;
     debug('quality enforcement: user menu closed — resuming');

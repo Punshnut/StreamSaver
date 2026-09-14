@@ -112,10 +112,12 @@ async function attemptMenuClose({ allowBodyClick, rounds, pollMs = 400 }) {
 async function resolveHiderRemoval(attemptsSoFar = 0) {
   if (hiderRefCount > 0) return; // a newer automation call owns the shield now
 
-  // A real user click on the settings gear (user-gear-guard.js) already force-
-  // revealed the shield synchronously and is not ours to close — don't sweep
-  // against a menu the user is actively using.
-  if (missionState.userMenuOpen) return;
+  // A real, verified user click on the settings gear (user-gear-guard.js)
+  // already force-revealed the shield synchronously and is not ours to close —
+  // don't sweep against a menu the user is actively using. Deliberately
+  // narrower than missionState.userMenuOpen (see constants.js) so an unrelated
+  // Twitch menu/dialog never blocks the shield's own normal close-and-lift path.
+  if (missionState.realGearMenuOpen) return;
 
   if (scanMenuRoots().length === 0) {
     debug('menuHider: hide (menus confirmed closed)', { t: Date.now(), attemptsSoFar });

@@ -112,9 +112,19 @@ export const missionState = {
   driftWatchdogTimerId: null, // Aggressive Mode: setInterval handle for the periodic drift re-check
   adScanTimerId: null,      // setInterval handle while waiting for an ad to finish
   forcePendingAfterFocus: false, // force enforcement was blocked by focus-loss; re-fire on next focus
+  // Broad: set whenever scanMenuRoots() sees ANY menu-shaped Twitch element (chat
+  // menus, dialogs, listboxes, not just the settings gear) — false-positive-prone
+  // by design, but that's fine here since it only pauses/defers background
+  // automatic enforcement rounds (Guard 5.5), which just retry later.
   userMenuOpen: false,           // user has a player menu open; enforcement is paused
   userMenuForcePending: false,   // a force-enforcement was blocked by userMenuOpen; replay on menu close
   preferenceSyncPendingAfterUserMenu: false, // a Subtitles/Low Latency sync was skipped by userMenuOpen; replay on menu close
+  // Narrow: set ONLY by user-gear-guard.js on a verified (isTrusted) click on the
+  // actual settings gear. Safe to use for aborting in-flight automation/mid-flight
+  // polling (sweepMenus/awaitSignal/deploySettingsPanel/resolveHiderRemoval) —
+  // unlike userMenuOpen, an unrelated chat menu or dialog can never set this, so it
+  // won't falsely block a popup-triggered quality/Low Latency change.
+  realGearMenuOpen: false,
   manualOverrideQuality: null,   // sticky per-tab quick-quality pick; takes precedence over mode-derived target until cleared
 };
 

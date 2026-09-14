@@ -319,10 +319,12 @@ export async function deploySettingsPanel() {
   }
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
-    // A real user click on the settings gear (user-gear-guard.js) sets this the
-    // instant it happens — don't open a competing panel while the user is
-    // trying to use their own.
-    if (missionState.userMenuOpen) {
+    // A real, verified user click on the settings gear (user-gear-guard.js) sets
+    // this the instant it happens — don't open a competing panel while the user
+    // is trying to use their own. Deliberately narrower than
+    // missionState.userMenuOpen (see constants.js) so an unrelated Twitch menu/
+    // dialog never blocks an ordinary popup-triggered open.
+    if (missionState.realGearMenuOpen) {
       return createResult(false, 'USER_MENU_OPEN', 'Aborted opening settings — user has a menu open.');
     }
 
