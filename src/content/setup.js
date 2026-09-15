@@ -360,15 +360,21 @@ export function bootEnforcementLoop() {
 
 /**
  * Watches the DOM for player menu removal. When enforcement was paused because
- * the user had a menu open (missionState.userMenuOpen), re-queues enforcement as
- * soon as all visible menu roots are gone.
+ * the user had a menu open (missionState.userMenuOpen and/or the narrower
+ * missionState.realGearMenuOpen set by user-gear-guard.js), re-queues enforcement
+ * as soon as all visible menu roots are gone.
+ *
+ * Checks both flags independently — enforcement.js's Guard 5.5 clears
+ * userMenuOpen on its own, much more frequent cadence, so relying on it alone
+ * here would let realGearMenuOpen get desynced and stuck true forever (this is
+ * the only place that ever resets it back to false).
  *
  * The MutationObserver callback exits immediately in the common case where no
  * user menu is active, so the constant subtree observation has negligible overhead.
  */
 function watchUserMenuActivity() {
   const observer = new MutationObserver(() => {
-    if (!missionState.userMenuOpen) return;
+    if (!missionState.userMenuOpen && !missionState.realGearMenuOpen) return;
     if (scanMenuRoots().some(el => el.offsetParent !== null)) return; // still open
 
     const hadForcePending = missionState.userMenuForcePending;
